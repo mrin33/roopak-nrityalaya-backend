@@ -20,8 +20,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// API Routes (we'll add these later)
-// app.use('/api/auth', require('./routes/authRoutes'));
+// API Routes
+app.use('/api/auth', require('./routes/authRoutes'));
 // app.use('/api/students', require('./routes/studentRoutes'));
 // app.use('/api/teachers', require('./routes/teacherRoutes'));
 
