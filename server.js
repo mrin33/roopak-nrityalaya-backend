@@ -22,6 +22,7 @@ app.get('/', (req, res) => {
 
 // API Routes
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/seed', require('./routes/seedRoutes'));
 // app.use('/api/students', require('./routes/studentRoutes'));
 // app.use('/api/teachers', require('./routes/teacherRoutes'));
 
