@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-const authMiddleware = (req, res, next) => {
+const authenticateToken = (req, res, next) => {
   try {
     // Get token from header
     const authHeader = req.headers.authorization;
@@ -49,7 +49,7 @@ const authMiddleware = (req, res, next) => {
 };
 
 // Middleware to check if user has specific role
-const checkRole = (...allowedRoles) => {
+const authorizeRole = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
@@ -69,5 +69,7 @@ const checkRole = (...allowedRoles) => {
   };
 };
 
-module.exports = authMiddleware;
-module.exports.checkRole = checkRole;
+module.exports = {
+  authenticateToken,
+  authorizeRole
+};

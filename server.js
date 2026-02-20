@@ -4,6 +4,11 @@ require('dotenv').config();
 
 const app = express();
 
+// Route imports 
+const studentRoutes = require('./routes/studentRoutes');
+const teacherRoutes = require('./routes/teacherRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+
 // Middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL,
@@ -14,7 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Test route
 app.get('/', (req, res) => {
-  res.json({ 
+  res.json({
     message: '🎭 Welcome to Roopak Nrityalaya API',
     status: 'Server is running'
   });
@@ -23,15 +28,16 @@ app.get('/', (req, res) => {
 // API Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/seed', require('./routes/seedRoutes'));
-// app.use('/api/students', require('./routes/studentRoutes'));
-// app.use('/api/teachers', require('./routes/teacherRoutes'));
+app.use('/api/students', studentRoutes);
+app.use('/api/teachers', teacherRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    message: 'Something went wrong!', 
-    error: process.env.NODE_ENV === 'development' ? err.message : {} 
+  res.status(500).json({
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.message : {}
   });
 });
 
