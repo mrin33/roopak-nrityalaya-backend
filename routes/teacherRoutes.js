@@ -31,6 +31,3 @@ router.get('/batch-transfers/available-teachers', batchTransferController.getAva
 //router.get('/attendance', teacherController.getAttendance);
 
 module.exports = router;
-console.log('teacherController:', teacherController);
-console.log('reviewController:', reviewController);
-console.log('batchTransferController:', batchTransferController);
