@@ -4,7 +4,7 @@ const studentController = {
   // Get student profile
   async getProfile(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
 
       const query = `
         SELECT 
@@ -18,10 +18,9 @@ const studentController = {
           b.time,
           t.full_name as teacher_name
         FROM students s
-        LEFT JOIN levels l ON s.level_id = l.level_id
+        LEFT JOIN levels l ON s.current_level_id = l.level_id
         LEFT JOIN users u ON s.user_id = u.user_id
-        LEFT JOIN student_batches sb ON s.student_id = sb.student_id AND sb.is_active = true
-        LEFT JOIN batches b ON sb.batch_id = b.batch_id
+        LEFT JOIN batches b ON s.batch_id = b.batch_id
         LEFT JOIN teachers t ON b.teacher_id = t.teacher_id
         WHERE s.user_id = $1
       `;
@@ -42,91 +41,117 @@ const studentController = {
   // Get student dashboard data
   async getDashboard(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
 
       // Get student
       const studentQuery = `
-        SELECT s.*, l.level_name, l.monthly_fee
+        SELECT 
+          s.student_id,
+          s.roll_number,
+          s.full_name,
+          s.payment_window,
+          s.discount,
+          s.current_level_id,
+          l.level_name,
+          l.monthly_fee,
+          b.batch_name,
+          b.schedule,
+          t.full_name as teacher_name
         FROM students s
-        LEFT JOIN levels l ON s.level_id = l.level_id
+        LEFT JOIN levels l ON s.current_level_id = l.level_id
+        LEFT JOIN batches b ON s.batch_id = b.batch_id
+        LEFT JOIN teachers t ON b.teacher_id = t.teacher_id
         WHERE s.user_id = $1
       `;
       const studentResult = await pool.query(studentQuery, [userId]);
       const student = studentResult.rows[0];
 
       if (!student) {
-        return res.status(404).json({ error: 'Student not found' });
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Student not found' 
+        });
       }
 
-      // Get attendance percentage (last 30 days)
+      // Calculate attendance percentage (last 30 days)
       const attendanceQuery = `
         SELECT 
-          COUNT(*) FILTER (WHERE status = 'present') as present_count,
-          COUNT(*) as total_count
+          COUNT(*) as total_classes,
+          COUNT(*) FILTER (WHERE status = 'present') as present_count
         FROM attendance
         WHERE student_id = $1
         AND attendance_date >= CURRENT_DATE - INTERVAL '30 days'
       `;
       const attendanceResult = await pool.query(attendanceQuery, [student.student_id]);
       const attendance = attendanceResult.rows[0];
-      const attendancePercentage = attendance.total_count > 0 
-        ? Math.round((attendance.present_count / attendance.total_count) * 100)
+      const attendancePercentage = attendance.total_classes > 0 
+        ? Math.round((attendance.present_count / attendance.total_classes) * 100)
         : 0;
 
-      // Get batch info
-      const batchQuery = `
-        SELECT b.*, t.full_name as teacher_name
-        FROM batches b
-        INNER JOIN student_batches sb ON b.batch_id = sb.batch_id
-        LEFT JOIN teachers t ON b.teacher_id = t.teacher_id
-        WHERE sb.student_id = $1 AND sb.is_active = true
-        LIMIT 1
-      `;
-      const batchResult = await pool.query(batchQuery, [student.student_id]);
-      const batchInfo = batchResult.rows[0];
-
-      // Get next payment
+      // Get current payment status
       const feeQuery = `
-        SELECT * FROM fee_payments
-        WHERE student_id = $1 AND status = 'pending'
-        ORDER BY due_date ASC
+        SELECT 
+          payment_status,
+          due_date,
+          late_fee,
+          final_amount
+        FROM fee_payments
+        WHERE student_id = $1
+        ORDER BY due_date DESC
         LIMIT 1
       `;
       const feeResult = await pool.query(feeQuery, [student.student_id]);
-      const nextPayment = feeResult.rows[0];
+      const feeInfo = feeResult.rows[0] || {
+        payment_status: 'paid',
+        due_date: null,
+        late_fee: 0,
+        final_amount: 0
+      };
 
       // Get recent notices
       const noticesQuery = `
-        SELECT * FROM notices
-        WHERE status = 'published'
+        SELECT notice_id as id, title, created_at as date
+        FROM notices
         ORDER BY created_at DESC
         LIMIT 5
       `;
       const noticesResult = await pool.query(noticesQuery);
 
-      // Calculate performance score
-      const performanceScore = this.calculatePerformanceScore(student, attendancePercentage);
-
+      // Return dashboard data
       res.json({
-        student,
-        attendancePercentage,
-        batchInfo,
-        nextPayment,
-        performanceScore,
+        attendancePercentage: attendancePercentage,
+        feeStatus: feeInfo.payment_status || 'paid',
+        roll_number: student.roll_number,
+        payment_window: student.payment_window,
+        discount: student.discount || 0,
+        next_due_date: feeInfo.due_date,
+        has_late_fee: (feeInfo.late_fee || 0) > 0,
+        late_fee_amount: feeInfo.late_fee || 0,
+        performance_score: 85,
+        current_level_id: student.current_level_id || 1,
+        batchInfo: student.batch_name ? {
+          batchName: student.batch_name,
+          schedule: student.schedule,
+          teacherName: student.teacher_name
+        } : null,
         recentNotices: noticesResult.rows,
-        has_late_fee: nextPayment && nextPayment.late_fee > 0,
-        late_fee_amount: nextPayment ? nextPayment.late_fee : 0
+        upcomingClasses: []
       });
+
     } catch (error) {
-      console.error('Error fetching dashboard:', error);
-      res.status(500).json({ error: 'Server error' });
+      console.error('Error fetching student dashboard:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Server error', 
+        message: error.message 
+      });
     }
   },
 
   // Update profile
   async updateProfile(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
       const { phone, address, emergency_contact_name, emergency_contact } = req.body;
 
       const query = `
@@ -163,7 +188,7 @@ const studentController = {
   // Update payment window
   async updatePaymentWindow(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
       const { payment_window } = req.body;
 
       if (!['monthly', 'quarterly', 'half_yearly', 'yearly'].includes(payment_window)) {

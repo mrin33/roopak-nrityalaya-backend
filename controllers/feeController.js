@@ -4,7 +4,7 @@ const feeController = {
   // Get student fees
   async getStudentFees(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
 
       // Get student with payment info
       const studentQuery = `
@@ -42,7 +42,7 @@ const feeController = {
   // Get fee history
   async getFeeHistory(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
 
       const query = `
         SELECT fp.*

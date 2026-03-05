@@ -4,7 +4,7 @@ const activityLogController = {
   // Create activity log
   async create(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
       const { log_date, activities_done, performances, practice_hours, notes, mood } = req.body;
 
       // Get student_id
@@ -51,7 +51,7 @@ const activityLogController = {
   // Get all logs for student
   async getAll(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
 
       const query = `
         SELECT al.*
@@ -72,7 +72,7 @@ const activityLogController = {
   // Get statistics
   async getStats(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
 
       const query = `
         SELECT 
@@ -98,7 +98,7 @@ const activityLogController = {
   async update(req, res) {
     try {
       const { log_id } = req.params;
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
       const updates = req.body;
 
       // Verify ownership
@@ -144,7 +144,7 @@ const activityLogController = {
   async delete(req, res) {
     try {
       const { log_id } = req.params;
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
 
       // Verify ownership and get practice hours
       const checkQuery = `

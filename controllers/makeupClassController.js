@@ -4,7 +4,7 @@ const makeupClassController = {
   // Get missed classes for student
   async getMissedClasses(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
 
       const query = `
         SELECT 
@@ -40,7 +40,7 @@ const makeupClassController = {
   // Create makeup request
   async create(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
       const { original_attendance_id, makeup_batch_id, makeup_class_date, notes } = req.body;
 
       // Get student_id
@@ -87,7 +87,7 @@ const makeupClassController = {
   // Get student's makeup requests
   async getMyRequests(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
 
       const query = `
         SELECT 

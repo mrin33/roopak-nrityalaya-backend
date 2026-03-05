@@ -4,7 +4,7 @@ const galleryRequestController = {
   // Create gallery upload request
   async create(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
       const { title, description, media_type, category, file_url } = req.body;
 
       // Get student_id
@@ -43,7 +43,7 @@ const galleryRequestController = {
   // Get all requests for student
   async getMyRequests(req, res) {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user.userId;
 
       const query = `
         SELECT gr.*

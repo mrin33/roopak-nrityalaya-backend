@@ -27,14 +27,14 @@ class Student {
   }
 
   // Find student by user_id
-  static async findByUserId(userId) {
+  static async findByUserId(userId) {  // FIXED: Changed parameter name to userId
     try {
       const result = await pool.query(
         `SELECT s.*, l.level_name, l.level_number
          FROM students s
          LEFT JOIN levels l ON s.current_level_id = l.level_id
          WHERE s.user_id = $1`,
-        [userId]
+        [userId]  // FIXED: Now matches parameter name
       );
       return result.rows[0];
     } catch (error) {
