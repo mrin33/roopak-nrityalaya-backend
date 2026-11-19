@@ -157,12 +157,9 @@ exports.login = async (req, res) => {
     // Update last login
     await User.updateLastLogin(user.user_id);
 
-    // Get user profile based on role
-    let profile = null;
-    if (user.role === 'student') {
-      profile = await Student.findByUserId(user.user_id);
-    }
-    // TODO: Add teacher profile fetch when teacher dashboard is built
+    // Get full user profile seamlessly using User model (handles students and teachers)
+    const userWithProfile = await User.getUserWithProfile(user.user_id);
+    const profile = userWithProfile ? userWithProfile.profile : null;
 
     // Generate token
     const token = generateToken(user.user_id, user.email, user.role);

@@ -11,16 +11,17 @@ const studentController = {
           s.*,
           l.level_name,
           l.level_code,
-          l.monthly_fee,
+          l.level_number,
           u.email,
           b.batch_name,
           b.schedule,
-          b.time,
+          b."time",
           t.full_name as teacher_name
         FROM students s
         LEFT JOIN levels l ON s.current_level_id = l.level_id
         LEFT JOIN users u ON s.user_id = u.user_id
-        LEFT JOIN batches b ON s.batch_id = b.batch_id
+        LEFT JOIN student_batches sb ON s.student_id = sb.student_id AND sb.is_active = true
+        LEFT JOIN batches b ON sb.batch_id = b.batch_id
         LEFT JOIN teachers t ON b.teacher_id = t.teacher_id
         WHERE s.user_id = $1
       `;
@@ -50,16 +51,16 @@ const studentController = {
           s.roll_number,
           s.full_name,
           s.payment_window,
-          s.discount,
           s.current_level_id,
           l.level_name,
-          l.monthly_fee,
+          l.level_number,
           b.batch_name,
           b.schedule,
           t.full_name as teacher_name
         FROM students s
         LEFT JOIN levels l ON s.current_level_id = l.level_id
-        LEFT JOIN batches b ON s.batch_id = b.batch_id
+        LEFT JOIN student_batches sb ON s.student_id = sb.student_id AND sb.is_active = true
+        LEFT JOIN batches b ON sb.batch_id = b.batch_id
         LEFT JOIN teachers t ON b.teacher_id = t.teacher_id
         WHERE s.user_id = $1
       `;
@@ -91,10 +92,10 @@ const studentController = {
       // Get current payment status
       const feeQuery = `
         SELECT 
-          payment_status,
+          status as payment_status,
           due_date,
-          late_fee,
-          final_amount
+          late_fee_applied as late_fee,
+          total_amount as final_amount
         FROM fee_payments
         WHERE student_id = $1
         ORDER BY due_date DESC
@@ -112,6 +113,7 @@ const studentController = {
       const noticesQuery = `
         SELECT notice_id as id, title, created_at as date
         FROM notices
+        WHERE is_active = true
         ORDER BY created_at DESC
         LIMIT 5
       `;
@@ -119,15 +121,16 @@ const studentController = {
 
       // Return dashboard data
       res.json({
+        full_name: student.full_name,
         attendancePercentage: attendancePercentage,
         feeStatus: feeInfo.payment_status || 'paid',
         roll_number: student.roll_number,
         payment_window: student.payment_window,
-        discount: student.discount || 0,
+        discount: 0, // Not stored in students table, set to 0
         next_due_date: feeInfo.due_date,
         has_late_fee: (feeInfo.late_fee || 0) > 0,
         late_fee_amount: feeInfo.late_fee || 0,
-        performance_score: 85,
+        performance_score: 85, // TODO: Calculate from total_performances
         current_level_id: student.current_level_id || 1,
         batchInfo: student.batch_name ? {
           batchName: student.batch_name,

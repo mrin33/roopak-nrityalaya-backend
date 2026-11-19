@@ -1,174 +1,100 @@
 const pool = require('../config/database');
 
 const galleryRequestController = {
-  // Create gallery upload request
-  async create(req, res) {
+  // Student: create a new upload request
+  createRequest: async (req, res) => {
     try {
-      const userId = req.user.userId;
-      const { title, description, media_type, category, file_url } = req.body;
-
-      // Get student_id
-      const studentQuery = 'SELECT student_id FROM students WHERE user_id = $1';
-      const studentResult = await pool.query(studentQuery, [userId]);
-      const studentId = studentResult.rows[0]?.student_id;
-
-      if (!studentId) {
-        return res.status(404).json({ error: 'Student not found' });
+      const student_id = req.user.user_id; // from auth middleware
+      const { title, description, media_type, category } = req.body;
+      
+      let file_url = null;
+      if (req.file) {
+        // Return relative path to be served statically
+        file_url = `/uploads/${req.file.filename}`;
+      } else {
+        return res.status(400).json({ message: 'No file uploaded' });
       }
 
       const query = `
-        INSERT INTO gallery_requests (
-          student_id, title, description, media_type, category, file_url, status
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+        INSERT INTO gallery_requests 
+        (student_id, title, description, media_type, category, status, file_url)
+        VALUES ($1, $2, $3, $4, $5, 'pending', $6)
         RETURNING *
       `;
-
-      const result = await pool.query(query, [
-        studentId,
-        title,
-        description,
-        media_type,
-        category,
-        file_url
-      ]);
-
-      res.status(201).json(result.rows[0]);
-    } catch (error) {
-      console.error('Error creating gallery request:', error);
-      res.status(500).json({ error: 'Server error' });
-    }
-  },
-
-  // Get all requests for student
-  async getMyRequests(req, res) {
-    try {
-      const userId = req.user.userId;
-
-      const query = `
-        SELECT gr.*
-        FROM gallery_requests gr
-        INNER JOIN students s ON gr.student_id = s.student_id
-        WHERE s.user_id = $1
-        ORDER BY gr.created_at DESC
-      `;
-
-      const result = await pool.query(query, [userId]);
-      res.json(result.rows);
-    } catch (error) {
-      console.error('Error fetching requests:', error);
-      res.status(500).json({ error: 'Server error' });
-    }
-  },
-
-  // Get all requests (Admin)
-  async getAllRequests(req, res) {
-    try {
-      const { status } = req.query;
-
-      let query = `
-        SELECT 
-          gr.*,
-          s.full_name as student_name,
-          s.roll_number
-        FROM gallery_requests gr
-        INNER JOIN students s ON gr.student_id = s.student_id
-      `;
-
-      const values = [];
-      if (status && status !== 'all') {
-        query += ' WHERE gr.status = $1';
-        values.push(status);
-      }
-
-      query += ' ORDER BY gr.created_at DESC';
-
+      const values = [student_id, title, description, media_type, category, file_url];
+      
       const result = await pool.query(query, values);
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      console.error('Error creating gallery request:', err);
+      res.status(500).json({ message: 'Server error parsing request' });
+    }
+  },
+
+  // Student: Get their own requests
+  getStudentRequests: async (req, res) => {
+    try {
+      const student_id = req.user.user_id;
+      const query = `
+        SELECT * FROM gallery_requests 
+        WHERE student_id = $1 
+        ORDER BY requested_at DESC
+      `;
+      const result = await pool.query(query, [student_id]);
       res.json(result.rows);
-    } catch (error) {
-      console.error('Error fetching all requests:', error);
-      res.status(500).json({ error: 'Server error' });
+    } catch (err) {
+      console.error('Error fetching student gallery requests:', err);
+      res.status(500).json({ message: 'Server error' });
     }
   },
 
-  // Approve request (Admin)
-  async approve(req, res) {
+  // Admin: Get all requests across all students with student info
+  getAllRequests: async (req, res) => {
     try {
-      const { request_id } = req.params;
-      const adminName = req.user.full_name || 'Admin';
+      const query = `
+        SELECT r.*, s.full_name as student_name, s.roll_number, 
+               u.full_name as reviewed_by_name
+        FROM gallery_requests r
+        JOIN user_profiles s ON r.student_id = s.user_id
+        LEFT JOIN user_profiles u ON r.reviewed_by = u.user_id
+        ORDER BY r.requested_at DESC
+      `;
+      const result = await pool.query(query);
+      res.json(result.rows);
+    } catch (err) {
+      console.error('Error fetching admin gallery requests:', err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  },
 
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
+  // Admin: Review a request (approve/reject)
+  updateRequestStatus: async (req, res) => {
+    try {
+      const admin_id = req.user.user_id;
+      const { id } = req.params;
+      const { status, rejection_reason } = req.body; // 'approved' or 'rejected'
 
-        // Update request status
-        const updateQuery = `
-          UPDATE gallery_requests 
-          SET 
-            status = 'approved',
-            reviewed_by = $1,
-            reviewed_at = CURRENT_TIMESTAMP
-          WHERE request_id = $2
-          RETURNING *
-        `;
-        const result = await client.query(updateQuery, [adminName, request_id]);
-
-        if (result.rows.length === 0) {
-          await client.query('ROLLBACK');
-          return res.status(404).json({ error: 'Request not found' });
-        }
-
-        const request = result.rows[0];
-
-        // Add to gallery table
-        await client.query(
-          `INSERT INTO gallery (title, description, image_url, category, uploaded_by)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [request.title, request.description, request.file_url, request.category, 'student']
-        );
-
-        await client.query('COMMIT');
-        res.json(result.rows[0]);
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
+      if (!['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status' });
       }
-    } catch (error) {
-      console.error('Error approving request:', error);
-      res.status(500).json({ error: 'Server error' });
-    }
-  },
-
-  // Reject request (Admin)
-  async reject(req, res) {
-    try {
-      const { request_id } = req.params;
-      const { rejection_reason } = req.body;
-      const adminName = req.user.full_name || 'Admin';
 
       const query = `
-        UPDATE gallery_requests 
-        SET 
-          status = 'rejected',
-          reviewed_by = $1,
-          reviewed_at = CURRENT_TIMESTAMP,
-          rejection_reason = $2
-        WHERE request_id = $3
+        UPDATE gallery_requests
+        SET status = $1, rejection_reason = $2, reviewed_at = CURRENT_TIMESTAMP, reviewed_by = $3
+        WHERE id = $4
         RETURNING *
       `;
-
-      const result = await pool.query(query, [adminName, rejection_reason, request_id]);
+      const values = [status, rejection_reason || null, admin_id, id];
+      const result = await pool.query(query, values);
 
       if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Request not found' });
+        return res.status(404).json({ message: 'Request not found' });
       }
 
-      res.json(result.rows[0]);
-    } catch (error) {
-      console.error('Error rejecting request:', error);
-      res.status(500).json({ error: 'Server error' });
+      res.json({ message: 'Status updated successfully', request: result.rows[0] });
+    } catch (err) {
+      console.error('Error updating gallery request status:', err);
+      res.status(500).json({ message: 'Server error' });
     }
   }
 };

@@ -207,3 +207,32 @@ COMMENT ON TABLE students IS 'Student profiles and information';
 COMMENT ON TABLE batches IS 'Class batches organized by level';
 COMMENT ON TABLE attendance IS 'Daily attendance records';
 COMMENT ON TABLE fee_payments IS 'Monthly fee payment tracking';
+
+CREATE TABLE notices (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    target_audience VARCHAR(50) DEFAULT 'all',
+    category VARCHAR(50) DEFAULT 'general',
+    is_important BOOLEAN DEFAULT false,
+    status VARCHAR(50) DEFAULT 'published',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE gallery_requests (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    media_type VARCHAR(50) DEFAULT 'photo',
+    category VARCHAR(100),
+    status VARCHAR(50) DEFAULT 'pending',
+    file_url TEXT,
+    rejection_reason TEXT,
+    requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TIMESTAMP WITH TIME ZONE,
+    reviewed_by INTEGER REFERENCES users(user_id)
+);
+

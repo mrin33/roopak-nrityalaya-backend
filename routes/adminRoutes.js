@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken, authorizeRole } = require('../middleware/authMiddleware');
 const adminController = require('../controllers/adminController');
-const galleryRequestController = require('../controllers/galleryRequestController');
 
 // All routes require authentication and admin role
 router.use(authenticateToken, authorizeRole('admin'));
@@ -33,11 +32,6 @@ router.delete('/batches/:batch_id', adminController.deleteBatch);
 router.get('/fees', adminController.getAllFees);
 router.post('/fees/record', adminController.recordFeePayment);
 
-// Gallery requests
-router.get('/gallery-requests', galleryRequestController.getAllRequests);
-router.put('/gallery-requests/:request_id/approve', galleryRequestController.approve);
-router.put('/gallery-requests/:request_id/reject', galleryRequestController.reject);
-
 // Analytics
 router.get('/analytics/best-teachers', adminController.getBestTeachers);
 router.get('/analytics/best-students', adminController.getBestStudents);
@@ -46,11 +40,5 @@ router.get('/analytics/discontinuation-reasons', adminController.getDiscontinuat
 
 // Status changes
 router.get('/status-changes', adminController.getStatusChanges);
-
-// Notices
-router.get('/notices', adminController.getAllNotices);
-router.post('/notices', adminController.createNotice);
-router.put('/notices/:notice_id', adminController.updateNotice);
-router.delete('/notices/:notice_id', adminController.deleteNotice);
 
 module.exports = router;

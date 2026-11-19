@@ -12,22 +12,23 @@ const getProfile = async (req, res) => {
         t.teacher_id,
         t.user_id,
         t.full_name,
-        t.email,
+        u.email,
         t.phone,
         t.specialization,
         t.experience_years,
         t.bio,
-        t.photo_url,
+        t.profile_photo_url as photo_url,
         t.is_active,
         COUNT(DISTINCT s.student_id) as total_students,
-        COALESCE(AVG(r.overall_rating), 0) as avg_rating
+        0 as avg_rating
       FROM teachers t
+      LEFT JOIN users u ON t.user_id = u.user_id
       LEFT JOIN batches b ON t.teacher_id = b.teacher_id
-      LEFT JOIN students s ON b.batch_id = s.batch_id AND s.status = 'active'
-      LEFT JOIN reviews r ON t.teacher_id = r.teacher_id
+      LEFT JOIN student_batches sb ON b.batch_id = sb.batch_id AND sb.is_active = true
+      LEFT JOIN students s ON sb.student_id = s.student_id AND s.is_active = true
       WHERE t.user_id = $1
-      GROUP BY t.teacher_id, t.user_id, t.full_name, t.email, t.phone, 
-               t.specialization, t.experience_years, t.bio, t.photo_url, t.is_active
+      GROUP BY t.teacher_id, t.user_id, t.full_name, u.email, t.phone, 
+               t.specialization, t.experience_years, t.bio, t.profile_photo_url, t.is_active
     `, [req.user.userId]);
 
     if (result.rows.length === 0) {
@@ -60,8 +61,9 @@ const getDashboard = async (req, res) => {
     const studentsResult = await pool.query(`
       SELECT COUNT(DISTINCT s.student_id) as total_students
       FROM students s
-      INNER JOIN batches b ON s.batch_id = b.batch_id
-      WHERE b.teacher_id = $1 AND s.status = 'active'
+      INNER JOIN student_batches sb ON s.student_id = sb.student_id AND sb.is_active = true
+      INNER JOIN batches b ON sb.batch_id = b.batch_id
+      WHERE b.teacher_id = $1 AND s.is_active = true
     `, [teacherId]);
 
     // Get total batches
@@ -71,31 +73,11 @@ const getDashboard = async (req, res) => {
       WHERE teacher_id = $1
     `, [teacherId]);
 
-    // Get average rating
-    const ratingResult = await pool.query(`
-      SELECT COALESCE(AVG(overall_rating), 0) as avg_rating
-      FROM reviews
-      WHERE teacher_id = $1
-    `, [teacherId]);
-
-    // Get recent reviews (last 5)
-    const recentReviews = await pool.query(`
-      SELECT 
-        r.*,
-        s.full_name as student_name,
-        s.roll_number
-      FROM reviews r
-      INNER JOIN students s ON r.student_id = s.student_id
-      WHERE r.teacher_id = $1
-      ORDER BY r.created_at DESC
-      LIMIT 5
-    `, [teacherId]);
-
     res.json({
       total_students: parseInt(studentsResult.rows[0].total_students),
       total_batches: parseInt(batchesResult.rows[0].total_batches),
-      avg_rating: parseFloat(ratingResult.rows[0].avg_rating).toFixed(1),
-      recent_reviews: recentReviews.rows
+      avg_rating: 0,
+      recent_reviews: []
     });
   } catch (error) {
     console.error('Error fetching teacher dashboard:', error);
@@ -115,10 +97,10 @@ const updateProfile = async (req, res) => {
       SET 
         phone = COALESCE($1, phone),
         bio = COALESCE($2, bio),
-        photo_url = COALESCE($3, photo_url),
+        profile_photo_url = COALESCE($3, profile_photo_url),
         updated_at = NOW()
       WHERE user_id = $4
-      RETURNING teacher_id, full_name, email, phone, bio, photo_url
+      RETURNING teacher_id, full_name, phone, bio, profile_photo_url as photo_url
     `, [phone, bio, photo_url, req.user.userId]);
 
     if (result.rows.length === 0) {
@@ -155,25 +137,18 @@ const getStudents = async (req, res) => {
         s.student_id,
         s.roll_number,
         s.full_name,
-        s.email,
+        u.email,
         s.phone,
         l.level_name,
         b.batch_name,
-        s.status,
-        COALESCE(
-          (SELECT COUNT(*) * 100.0 / NULLIF(
-            (SELECT COUNT(*) FROM batches WHERE batch_id = s.batch_id), 0
-          )
-          FROM attendance a
-          WHERE a.student_id = s.student_id 
-          AND a.status = 'present'
-          AND a.attendance_date >= DATE_TRUNC('month', CURRENT_DATE)),
-          0
-        ) as attendance_percentage
+        CASE WHEN s.is_active THEN 'active' ELSE 'inactive' END as status,
+        0 as attendance_percentage
       FROM students s
-      INNER JOIN batches b ON s.batch_id = b.batch_id
-      INNER JOIN levels l ON s.level_id = l.level_id
-      WHERE b.teacher_id = $1 AND s.status = 'active'
+      LEFT JOIN users u ON s.user_id = u.user_id
+      INNER JOIN student_batches sb ON s.student_id = sb.student_id AND sb.is_active = true
+      INNER JOIN batches b ON sb.batch_id = b.batch_id
+      LEFT JOIN levels l ON s.current_level_id = l.level_id
+      WHERE b.teacher_id = $1 AND s.is_active = true
       ORDER BY s.roll_number
     `, [teacherId]);
 
@@ -205,16 +180,17 @@ const getBatches = async (req, res) => {
         b.batch_name,
         l.level_name,
         b.schedule,
-        b.time,
+        b."time",
         b.room,
         b.current_enrolled,
         b.max_students,
         COUNT(s.student_id) as active_students
       FROM batches b
       INNER JOIN levels l ON b.level_id = l.level_id
-      LEFT JOIN students s ON b.batch_id = s.batch_id AND s.status = 'active'
+      LEFT JOIN student_batches sb ON b.batch_id = sb.batch_id AND sb.is_active = true
+      LEFT JOIN students s ON sb.student_id = s.student_id AND s.is_active = true
       WHERE b.teacher_id = $1
-      GROUP BY b.batch_id, b.batch_name, l.level_name, b.schedule, b.time, b.room, b.current_enrolled, b.max_students
+      GROUP BY b.batch_id, b.batch_name, l.level_name, b.schedule, b."time", b.room, b.current_enrolled, b.max_students
       ORDER BY b.batch_name
     `, [teacherId]);
 

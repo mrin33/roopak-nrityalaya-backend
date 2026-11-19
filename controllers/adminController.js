@@ -10,7 +10,7 @@ const adminController = {
 
       // Total students
       const studentsResult = await pool.query(
-        "SELECT COUNT(*) as count FROM students WHERE status = 'active'"
+        "SELECT COUNT(*) as count FROM students WHERE is_active = true"
       );
       stats.total_students = parseInt(studentsResult.rows[0].count);
 
@@ -28,7 +28,7 @@ const adminController = {
       const revenueResult = await pool.query(
         `SELECT COALESCE(SUM(amount_paid), 0) as revenue 
          FROM fee_payments 
-         WHERE payment_status = 'paid' 
+         WHERE status = 'completed' 
          AND EXTRACT(MONTH FROM payment_date) = EXTRACT(MONTH FROM CURRENT_DATE)
          AND EXTRACT(YEAR FROM payment_date) = EXTRACT(YEAR FROM CURRENT_DATE)`
       );
@@ -53,17 +53,19 @@ const adminController = {
           s.student_id,
           s.roll_number,
           s.full_name,
-          s.email,
+          u.email,
           s.phone,
-          s.status,
+          CASE WHEN s.is_active THEN 'active' ELSE 'inactive' END as status,
           s.payment_window,
-          s.discount,
+          0 as discount,
           l.level_name,
           b.batch_name,
           s.enrollment_date
         FROM students s
-        LEFT JOIN levels l ON s.level_id = l.level_id
-        LEFT JOIN batches b ON s.batch_id = b.batch_id
+        LEFT JOIN users u ON s.user_id = u.user_id
+        LEFT JOIN levels l ON s.current_level_id = l.level_id
+        LEFT JOIN student_batches sb ON s.student_id = sb.student_id AND sb.is_active = true
+        LEFT JOIN batches b ON sb.batch_id = b.batch_id
         WHERE 1=1
       `;
 
@@ -71,14 +73,17 @@ const adminController = {
       let paramCount = 1;
 
       if (level_id) {
-        query += ` AND s.level_id = $${paramCount}`;
+        query += ` AND s.current_level_id = $${paramCount}`;
         values.push(level_id);
         paramCount++;
       }
 
       if (status) {
-        query += ` AND s.status = $${paramCount}`;
-        values.push(status);
+        if (status === 'active') {
+          query += ` AND s.is_active = true`;
+        } else {
+          query += ` AND s.is_active = false`;
+        }
         paramCount++;
       }
 
@@ -89,12 +94,12 @@ const adminController = {
       }
 
       if (search) {
-        query += ` AND (s.full_name ILIKE $${paramCount} OR s.roll_number ILIKE $${paramCount} OR s.email ILIKE $${paramCount})`;
+        query += ` AND (s.full_name ILIKE $${paramCount} OR u.email ILIKE $${paramCount})`;
         values.push(`%${search}%`);
         paramCount++;
       }
 
-      query += ' ORDER BY s.roll_number';
+      query += ' ORDER BY s.full_name';
 
       const result = await pool.query(query, values);
       res.json(result.rows);
@@ -252,11 +257,11 @@ const adminController = {
           t.*,
           COUNT(DISTINCT b.batch_id) as total_batches,
           COUNT(DISTINCT s.student_id) as total_students,
-          COALESCE(AVG(r.overall_rating), 0) as avg_rating
+          0 as avg_rating
         FROM teachers t
         LEFT JOIN batches b ON t.teacher_id = b.teacher_id
-        LEFT JOIN students s ON b.batch_id = s.batch_id AND s.status = 'active'
-        LEFT JOIN reviews r ON t.teacher_id = r.teacher_id
+        LEFT JOIN student_batches sb ON b.batch_id = sb.batch_id AND sb.is_active = true
+        LEFT JOIN students s ON sb.student_id = s.student_id AND s.is_active = true
         GROUP BY t.teacher_id
         ORDER BY t.full_name
       `);
@@ -295,7 +300,7 @@ const adminController = {
       const hashedPassword = await bcrypt.hash(password, 10);
 
       const userResult = await pool.query(
-        'INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING user_id',
+        'INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3) RETURNING user_id',
         [email, hashedPassword, 'teacher']
       );
 
@@ -304,10 +309,10 @@ const adminController = {
       // Create teacher profile
       const teacherResult = await pool.query(`
         INSERT INTO teachers 
-        (user_id, full_name, email, phone, specialization, experience_years, bio, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+        (user_id, full_name, phone, specialization, experience_years, bio, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, true)
         RETURNING *
-      `, [userId, full_name, email, phone, specialization, experience_years, bio]);
+      `, [userId, full_name, phone, specialization, experience_years, bio]);
 
       await pool.query('COMMIT');
 
@@ -408,12 +413,10 @@ const adminController = {
           b.*,
           l.level_name,
           t.full_name as teacher_name,
-          COUNT(s.student_id) as current_enrolled
+          b.current_enrolled
         FROM batches b
         LEFT JOIN levels l ON b.level_id = l.level_id
         LEFT JOIN teachers t ON b.teacher_id = t.teacher_id
-        LEFT JOIN students s ON b.batch_id = s.batch_id AND s.status = 'active'
-        GROUP BY b.batch_id, l.level_name, t.full_name
         ORDER BY b.batch_name
       `);
 
@@ -434,7 +437,8 @@ const adminController = {
         schedule, 
         time, 
         room, 
-        max_students = 15 
+        max_students,
+        start_date
       } = req.body;
 
       if (!batch_name || !level_id || !teacher_id || !schedule || !time) {
@@ -443,12 +447,16 @@ const adminController = {
         });
       }
 
+      const parsedMaxStudents = max_students ? parseInt(max_students, 10) : 15;
+      const parsedLevelId = parseInt(level_id, 10);
+      const parsedTeacherId = parseInt(teacher_id, 10);
+
       const result = await pool.query(`
         INSERT INTO batches 
-        (batch_name, level_id, teacher_id, schedule, time, room, max_students, current_enrolled)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 0)
+        (batch_name, level_id, teacher_id, schedule, "time", room, max_students, start_date, current_enrolled)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0)
         RETURNING *
-      `, [batch_name, level_id, teacher_id, schedule, time, room, max_students]);
+      `, [batch_name, parsedLevelId, parsedTeacherId, schedule, time, room, parsedMaxStudents, start_date || null]);
 
       res.status(201).json({
         message: 'Batch created successfully',

@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -8,11 +9,16 @@ const app = express();
 const studentRoutes = require('./routes/studentRoutes');
 const teacherRoutes = require('./routes/teacherRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const noticeRoutes = require('./routes/noticeRoutes');
+const galleryRequestRoutes = require('./routes/galleryRequestRoutes');
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from the uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Test route
 app.get('/', (req, res) => {
@@ -28,6 +34,8 @@ app.use('/api/seed', require('./routes/seedRoutes'));
 app.use('/api/students', studentRoutes);
 app.use('/api/teachers', teacherRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/notices', noticeRoutes);
+app.use('/api/gallery-requests', galleryRequestRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

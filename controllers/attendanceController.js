@@ -1,5 +1,7 @@
 const pool = require('../config/database');
 
+// ========== TEACHER/ADMIN METHODS (Keep your existing ones) ==========
+
 // @desc    Mark attendance for a class
 // @route   POST /api/attendance/mark
 // @access  Private (Teacher)
@@ -57,17 +59,17 @@ const markAttendance = async (req, res) => {
         // Update existing attendance
         result = await pool.query(`
           UPDATE attendance 
-          SET status = $1, notes = $2, updated_at = NOW()
+          SET status = $1, notes = $2
           WHERE student_id = $3 AND attendance_date = $4
           RETURNING *
         `, [status, notes || null, student_id, attendance_date]);
       } else {
         // Insert new attendance
         result = await pool.query(`
-          INSERT INTO attendance (student_id, attendance_date, status, notes)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO attendance (student_id, batch_id, attendance_date, status, marked_by, notes)
+          VALUES ($1, $2, $3, $4, $5, $6)
           RETURNING *
-        `, [student_id, attendance_date, status, notes || null]);
+        `, [student_id, batch_id, attendance_date, status, teacherId, notes || null]);
       }
 
       markedAttendance.push(result.rows[0]);
@@ -82,67 +84,6 @@ const markAttendance = async (req, res) => {
   } catch (error) {
     await pool.query('ROLLBACK');
     console.error('Error marking attendance:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-};
-
-// @desc    Get attendance records for a student
-// @route   GET /api/attendance/student/:studentId
-// @access  Private (Student, Teacher, Admin)
-const getStudentAttendance = async (req, res) => {
-  try {
-    const { studentId } = req.params;
-    const { month, year } = req.query;
-
-    let query = `
-      SELECT 
-        a.attendance_id,
-        a.attendance_date,
-        a.status,
-        a.notes,
-        b.batch_name,
-        t.full_name as teacher_name
-      FROM attendance a
-      INNER JOIN students s ON a.student_id = s.student_id
-      LEFT JOIN batches b ON s.batch_id = b.batch_id
-      LEFT JOIN teachers t ON b.teacher_id = t.teacher_id
-      WHERE a.student_id = $1
-    `;
-
-    const queryParams = [studentId];
-
-    // Filter by month and year if provided
-    if (month && year) {
-      query += ` AND EXTRACT(MONTH FROM a.attendance_date) = $2 
-                 AND EXTRACT(YEAR FROM a.attendance_date) = $3`;
-      queryParams.push(month, year);
-    }
-
-    query += ' ORDER BY a.attendance_date DESC';
-
-    const result = await pool.query(query, queryParams);
-
-    // Calculate statistics
-    const totalClasses = result.rows.length;
-    const presentCount = result.rows.filter(r => r.status === 'present').length;
-    const absentCount = result.rows.filter(r => r.status === 'absent').length;
-    const lateCount = result.rows.filter(r => r.status === 'late').length;
-    const attendancePercentage = totalClasses > 0 
-      ? ((presentCount + (lateCount * 0.5)) / totalClasses * 100).toFixed(2)
-      : 0;
-
-    res.json({
-      records: result.rows,
-      statistics: {
-        total_classes: totalClasses,
-        present: presentCount,
-        absent: absentCount,
-        late: lateCount,
-        attendance_percentage: parseFloat(attendancePercentage)
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching student attendance:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -168,8 +109,9 @@ const getBatchAttendance = async (req, res) => {
         a.notes,
         a.attendance_id
       FROM students s
+      INNER JOIN student_batches sb ON s.student_id = sb.student_id AND sb.is_active = true
       LEFT JOIN attendance a ON s.student_id = a.student_id AND a.attendance_date = $1
-      WHERE s.batch_id = $2 AND s.status = 'active'
+      WHERE sb.batch_id = $2 AND s.is_active = true
       ORDER BY s.roll_number
     `, [date, batchId]);
 
@@ -190,7 +132,7 @@ const getAttendanceSummary = async (req, res) => {
     let query = `
       SELECT 
         b.batch_name,
-        COUNT(DISTINCT s.student_id) as total_students,
+        COUNT(DISTINCT sb.student_id) as total_students,
         COUNT(DISTINCT CASE WHEN a.status = 'present' THEN a.attendance_id END) as total_present,
         COUNT(DISTINCT CASE WHEN a.status = 'absent' THEN a.attendance_id END) as total_absent,
         COUNT(DISTINCT CASE WHEN a.status = 'late' THEN a.attendance_id END) as total_late,
@@ -200,7 +142,8 @@ const getAttendanceSummary = async (req, res) => {
           2
         ) as attendance_percentage
       FROM batches b
-      LEFT JOIN students s ON b.batch_id = s.batch_id AND s.status = 'active'
+      LEFT JOIN student_batches sb ON b.batch_id = sb.batch_id AND sb.is_active = true
+      LEFT JOIN students s ON sb.student_id = s.student_id AND s.is_active = true
       LEFT JOIN attendance a ON s.student_id = a.student_id
     `;
 
@@ -234,8 +177,7 @@ const updateAttendance = async (req, res) => {
       UPDATE attendance 
       SET 
         status = COALESCE($1, status),
-        notes = COALESCE($2, notes),
-        updated_at = NOW()
+        notes = COALESCE($2, notes)
       WHERE attendance_id = $3
       RETURNING *
     `, [status, notes, attendanceId]);
@@ -277,11 +219,133 @@ const deleteAttendance = async (req, res) => {
   }
 };
 
+// ========== NEW STUDENT METHODS (Add these) ==========
+
+// @desc    Get attendance records for current student
+// @route   GET /api/students/attendance
+// @access  Private (Student)
+const getStudentAttendance = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { month, year } = req.query;
+
+    // Get student_id
+    const studentQuery = 'SELECT student_id FROM students WHERE user_id = $1';
+    const studentResult = await pool.query(studentQuery, [userId]);
+    const studentId = studentResult.rows[0]?.student_id;
+
+    if (!studentId) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    let query = `
+      SELECT 
+        a.attendance_id,
+        a.attendance_date,
+        a.status,
+        a.notes,
+        b.batch_name
+      FROM attendance a
+      LEFT JOIN batches b ON a.batch_id = b.batch_id
+      WHERE a.student_id = $1
+    `;
+
+    const params = [studentId];
+
+    // Add month/year filter if provided
+    if (month && year) {
+      query += ` AND EXTRACT(MONTH FROM a.attendance_date) = $2 AND EXTRACT(YEAR FROM a.attendance_date) = $3`;
+      params.push(month, year);
+    }
+
+    query += ` ORDER BY a.attendance_date DESC`;
+
+    const result = await pool.query(query, params);
+
+    // Calculate overall statistics
+    const statsQuery = `
+      SELECT 
+        COUNT(*) as total_classes,
+        COUNT(*) FILTER (WHERE status = 'present') as present,
+        COUNT(*) FILTER (WHERE status = 'absent') as absent,
+        COUNT(*) FILTER (WHERE status = 'late') as late,
+        ROUND(
+          (COUNT(*) FILTER (WHERE status = 'present')::numeric / 
+          NULLIF(COUNT(*), 0)::numeric) * 100, 
+          2
+        ) as percentage
+      FROM attendance
+      WHERE student_id = $1
+    `;
+
+    const statsResult = await pool.query(statsQuery, [studentId]);
+
+    res.json({
+      records: result.rows,
+      overall: {
+        present: parseInt(statsResult.rows[0].present) || 0,
+        absent: parseInt(statsResult.rows[0].absent) || 0,
+        late: parseInt(statsResult.rows[0].late) || 0,
+        percentage: parseFloat(statsResult.rows[0].percentage) || 0
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching attendance:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// @desc    Get attendance summary for dashboard
+// @route   GET /api/students/attendance/summary
+// @access  Private (Student)
+const getAttendanceSummaryForStudent = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // Get student_id
+    const studentQuery = 'SELECT student_id FROM students WHERE user_id = $1';
+    const studentResult = await pool.query(studentQuery, [userId]);
+    const studentId = studentResult.rows[0]?.student_id;
+
+    if (!studentId) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    // Get last 30 days attendance
+    const query = `
+      SELECT 
+        COUNT(*) as total_classes,
+        COUNT(*) FILTER (WHERE status = 'present') as present_count,
+        ROUND(
+          (COUNT(*) FILTER (WHERE status = 'present')::numeric / 
+          NULLIF(COUNT(*), 0)::numeric) * 100, 
+          2
+        ) as percentage
+      FROM attendance
+      WHERE student_id = $1
+      AND attendance_date >= CURRENT_DATE - INTERVAL '30 days'
+    `;
+
+    const result = await pool.query(query, [studentId]);
+
+    res.json({
+      totalClasses: parseInt(result.rows[0].total_classes) || 0,
+      presentCount: parseInt(result.rows[0].present_count) || 0,
+      percentage: parseFloat(result.rows[0].percentage) || 0
+    });
+  } catch (error) {
+    console.error('Error fetching attendance summary:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
 module.exports = {
   markAttendance,
-  getStudentAttendance,
   getBatchAttendance,
   getAttendanceSummary,
   updateAttendance,
-  deleteAttendance
+  deleteAttendance,
+  // NEW student methods
+  getStudentAttendance,
+  getAttendanceSummaryForStudent
 };
