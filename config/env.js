@@ -16,6 +16,10 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
   fail('JWT_SECRET must be set and at least 32 characters long.');
 }
 
+if (isProduction && /change-me|example|secret/i.test(JWT_SECRET)) {
+  fail('JWT_SECRET looks like a placeholder; generate a random value for production.');
+}
+
 const splitList = (value) =>
   (value || '')
     .split(',')
@@ -34,6 +38,13 @@ const toInt = (value, fallback) => {
   const n = parseInt(value, 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 };
+
+const dbSslSetting = String(process.env.DB_SSL || '').toLowerCase();
+const dbSsl = ['true', '1', 'require'].includes(dbSslSetting)
+  ? { rejectUnauthorized: true }
+  : dbSslSetting === 'no-verify'
+  ? { rejectUnauthorized: false }
+  : undefined;
 
 module.exports = {
   NODE_ENV,
@@ -62,8 +73,10 @@ module.exports = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    // Managed providers (Neon, Render, Supabase) require TLS.
-    ssl: ['true', '1', 'require'].includes(String(process.env.DB_SSL).toLowerCase()),
+    // Managed providers (Neon, Render, Supabase) require TLS. 'true' verifies the
+    // server certificate; 'no-verify' encrypts without verifying it (only for
+    // providers that use a self-signed certificate).
+    ssl: dbSsl,
     max: toInt(process.env.DB_POOL_MAX, 10),
   },
 };

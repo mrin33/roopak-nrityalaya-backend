@@ -13,7 +13,7 @@ const pool = new Pool({
   user: db.connectionString ? undefined : db.user,
   password: db.connectionString ? undefined : db.password,
   database: db.connectionString ? undefined : db.database,
-  ssl: db.ssl ? { rejectUnauthorized: false } : undefined,
+  ssl: db.ssl,
   max: db.max,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
