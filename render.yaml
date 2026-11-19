@@ -1,0 +1,32 @@
+# Render Blueprint for the API (https://render.com/docs/blueprint-spec).
+# Nothing is deployed until you connect the repository and apply this file.
+services:
+  - type: web
+    name: roopak-nrityalaya-api
+    runtime: node
+    plan: starter            # a persistent disk requires a paid instance
+    rootDir: .               # set to "backend" if the repo contains both apps
+    buildCommand: npm ci --omit=dev
+    preDeployCommand: npm run migrate
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DATABASE_URL        # Neon/Supabase connection string (direct, not pooled)
+        sync: false
+      - key: DB_SSL
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL        # e.g. https://your-app.vercel.app
+        sync: false
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+    disk:
+      name: media
+      mountPath: /var/data
+      sizeGB: 5
