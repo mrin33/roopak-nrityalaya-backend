@@ -1,16 +1,36 @@
 const express = require('express');
-const router = express.Router();
 const noticeController = require('../controllers/noticeController');
-const { authenticateToken, authorizeRole } = require('../middleware/authMiddleware');
+const { authenticateToken, optionalAuth, authorizeRole } = require('../middleware/authMiddleware');
+const validate = require('../middleware/validate');
+const { content: v } = require('../validators/domainValidators');
 
-// Public or Authenticated routes
-// Everyone can view published notices
-router.get('/', noticeController.getNotices);
+const router = express.Router();
 
-// Admin-only routes
+// Public: published notices; audience depends on who is viewing.
+router.get('/', optionalAuth, validate({ query: v.noticesQuery }), noticeController.getNotices);
+
+// Admin only
 router.get('/admin', authenticateToken, authorizeRole('admin'), noticeController.getAllAdminNotices);
-router.post('/', authenticateToken, authorizeRole('admin'), noticeController.createNotice);
-router.put('/:id', authenticateToken, authorizeRole('admin'), noticeController.updateNotice);
-router.delete('/:id', authenticateToken, authorizeRole('admin'), noticeController.deleteNotice);
+router.post(
+  '/',
+  authenticateToken,
+  authorizeRole('admin'),
+  validate({ body: v.noticeBody }),
+  noticeController.createNotice
+);
+router.put(
+  '/:id',
+  authenticateToken,
+  authorizeRole('admin'),
+  validate({ params: v.noticeId, body: v.noticeBody }),
+  noticeController.updateNotice
+);
+router.delete(
+  '/:id',
+  authenticateToken,
+  authorizeRole('admin'),
+  validate({ params: v.noticeId }),
+  noticeController.deleteNotice
+);
 
 module.exports = router;

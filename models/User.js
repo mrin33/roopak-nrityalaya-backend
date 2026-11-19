@@ -1,93 +1,63 @@
 const pool = require('../config/database');
 
+// `db` may be the pool or a transaction client from withTransaction().
 class User {
-  // Find user by email
-  static async findByEmail(email) {
-    try {
-      const result = await pool.query(
-        'SELECT * FROM users WHERE email = $1',
-        [email]
-      );
-      return result.rows[0];
-    } catch (error) {
-      throw error;
-    }
+  static async findByEmail(email, db = pool) {
+    const { rows } = await db.query('SELECT * FROM users WHERE lower(email) = lower($1)', [email]);
+    return rows[0];
   }
 
-  // Find user by ID
-  static async findById(userId) {
-    try {
-      const result = await pool.query(
-        'SELECT user_id, email, role, is_active, created_at FROM users WHERE user_id = $1',
-        [userId]
-      );
-      return result.rows[0];
-    } catch (error) {
-      throw error;
-    }
+  static async findById(userId, db = pool) {
+    const { rows } = await db.query(
+      'SELECT user_id, email, role, is_active, last_login, created_at FROM users WHERE user_id = $1',
+      [userId]
+    );
+    return rows[0];
   }
 
-  // Create new user (for registration)
-  static async create(email, passwordHash, role = 'student') {
-    try {
-      const result = await pool.query(
-        `INSERT INTO users (email, password_hash, role, is_active) 
-         VALUES ($1, $2, $3, true) 
-         RETURNING user_id, email, role, created_at`,
-        [email, passwordHash, role]
-      );
-      return result.rows[0];
-    } catch (error) {
-      throw error;
-    }
+  static async create(email, passwordHash, role = 'student', db = pool) {
+    const { rows } = await db.query(
+      `INSERT INTO users (email, password_hash, role, is_active, password_changed_at)
+       VALUES (lower($1), $2, $3, true, now())
+       RETURNING user_id, email, role, created_at`,
+      [email, passwordHash, role]
+    );
+    return rows[0];
   }
 
-  // Get user with full profile (including student/teacher data)
-  static async getUserWithProfile(userId) {
-    try {
-      const result = await pool.query(
-        `SELECT 
-          u.user_id, u.email, u.role, u.is_active,
-          CASE 
-            WHEN u.role = 'student' THEN row_to_json(s.*)
-            WHEN u.role = 'teacher' THEN row_to_json(t.*)
-            ELSE NULL
-          END as profile
-        FROM users u
-        LEFT JOIN students s ON u.user_id = s.user_id
-        LEFT JOIN teachers t ON u.user_id = t.user_id
-        WHERE u.user_id = $1`,
-        [userId]
-      );
-      return result.rows[0];
-    } catch (error) {
-      throw error;
-    }
+  // User with their role-specific profile (never includes password_hash).
+  static async getUserWithProfile(userId, db = pool) {
+    const { rows } = await db.query(
+      `SELECT
+         u.user_id, u.email, u.role, u.is_active,
+         CASE
+           WHEN u.role = 'student' THEN (SELECT row_to_json(s.*) FROM students s WHERE s.user_id = u.user_id LIMIT 1)
+           WHEN u.role = 'teacher' THEN (SELECT row_to_json(t.*) FROM teachers t WHERE t.user_id = u.user_id LIMIT 1)
+           ELSE NULL
+         END AS profile
+       FROM users u
+       WHERE u.user_id = $1`,
+      [userId]
+    );
+    return rows[0];
   }
 
-  // Update user's last login
-  static async updateLastLogin(userId) {
-    try {
-      await pool.query(
-        'UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE user_id = $1',
-        [userId]
-      );
-    } catch (error) {
-      throw error;
-    }
+  static async updateLastLogin(userId, db = pool) {
+    await db.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = $1', [userId]);
   }
 
-  // Check if email already exists
-  static async emailExists(email) {
-    try {
-      const result = await pool.query(
-        'SELECT COUNT(*) FROM users WHERE email = $1',
-        [email]
-      );
-      return parseInt(result.rows[0].count) > 0;
-    } catch (error) {
-      throw error;
-    }
+  static async setPassword(userId, passwordHash, db = pool) {
+    await db.query(
+      `UPDATE users
+          SET password_hash = $1, password_changed_at = now(), updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = $2`,
+      [passwordHash, userId]
+    );
+  }
+
+  static async emailExists(email, db = pool) {
+    const { rows } = await db.query('SELECT 1 FROM users WHERE lower(email) = lower($1)', [email]);
+    return rows.length > 0;
   }
 }
 

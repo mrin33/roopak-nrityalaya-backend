@@ -1,22 +1,48 @@
 const { Pool } = require('pg');
-require('dotenv').config();
+const { db } = require('./env');
 
 const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  connectionString: db.connectionString,
+  host: db.connectionString ? undefined : db.host,
+  port: db.connectionString ? undefined : db.port,
+  user: db.connectionString ? undefined : db.user,
+  password: db.connectionString ? undefined : db.password,
+  database: db.connectionString ? undefined : db.database,
+  ssl: db.ssl ? { rejectUnauthorized: false } : undefined,
+  max: db.max,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
-// Test database connection
-pool.on('connect', () => {
-  console.log('✅ Connected to PostgreSQL database');
-});
-
+// An error on an idle client (e.g. the DB restarted) must not crash the
+// whole API: the pool discards the broken client and creates a new one.
 pool.on('error', (err) => {
-  console.error('❌ Unexpected error on idle client', err);
-  process.exit(-1);
+  console.error('PostgreSQL idle client error:', err.message);
 });
+
+/**
+ * Run `fn(client)` inside a single transaction on ONE acquired connection.
+ * Commits when fn resolves, rolls back when it throws, always releases.
+ */
+const withTransaction = async (fn) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackErr) {
+      console.error('Rollback failed:', rollbackErr.message);
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+};
 
 module.exports = pool;
+module.exports.pool = pool;
+module.exports.withTransaction = withTransaction;

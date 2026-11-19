@@ -1,181 +1,143 @@
 const pool = require('../config/database');
+const { withTransaction } = require('../config/database');
+const AppError = require('../utils/AppError');
+const Student = require('../models/Student');
+const { wrapController } = require('../utils/asyncHandler');
 
-const activityLogController = {
-  // Create activity log
-  async create(req, res) {
-    try {
-      const userId = req.user.userId;
-      const { log_date, activities_done, performances, practice_hours, notes, mood } = req.body;
+// The ONLY columns a student may write. Column names are never taken from
+// user input: the SET clause is built from this constant list and all
+// values are passed as bind parameters.
+const UPDATABLE_COLUMNS = ['log_date', 'activities_done', 'performances', 'practice_hours', 'notes', 'mood'];
 
-      // Get student_id
-      const studentQuery = 'SELECT student_id FROM students WHERE user_id = $1';
-      const studentResult = await pool.query(studentQuery, [userId]);
-      const studentId = studentResult.rows[0]?.student_id;
-
-      if (!studentId) {
-        return res.status(404).json({ error: 'Student not found' });
-      }
-
-      const query = `
-        INSERT INTO student_activity_logs (
-          student_id, log_date, activities_done, performances, 
-          practice_hours, notes, mood
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING *
-      `;
-
-      const result = await pool.query(query, [
-        studentId,
-        log_date,
-        activities_done,
-        performances || 'None',
-        practice_hours,
-        notes,
-        mood
-      ]);
-
-      // Update student's total practice hours
-      await pool.query(
-        'UPDATE students SET total_practice_hours = total_practice_hours + $1 WHERE student_id = $2',
-        [practice_hours, studentId]
-      );
-
-      res.status(201).json(result.rows[0]);
-    } catch (error) {
-      console.error('Error creating activity log:', error);
-      res.status(500).json({ error: 'Server error' });
-    }
-  },
-
-  // Get all logs for student
-  async getAll(req, res) {
-    try {
-      const userId = req.user.userId;
-
-      const query = `
-        SELECT al.*
-        FROM student_activity_logs al
-        INNER JOIN students s ON al.student_id = s.student_id
-        WHERE s.user_id = $1
-        ORDER BY al.log_date DESC
-      `;
-
-      const result = await pool.query(query, [userId]);
-      res.json(result.rows);
-    } catch (error) {
-      console.error('Error fetching activity logs:', error);
-      res.status(500).json({ error: 'Server error' });
-    }
-  },
-
-  // Get statistics
-  async getStats(req, res) {
-    try {
-      const userId = req.user.userId;
-
-      const query = `
-        SELECT 
-          SUM(practice_hours) as total_practice_hours,
-          AVG(practice_hours) as avg_practice_hours,
-          COUNT(*) FILTER (WHERE performances != 'None') as total_performances,
-          COUNT(*) as total_logs,
-          COUNT(*) FILTER (WHERE log_date >= CURRENT_DATE - INTERVAL '7 days') as this_week_logs
-        FROM student_activity_logs al
-        INNER JOIN students s ON al.student_id = s.student_id
-        WHERE s.user_id = $1
-      `;
-
-      const result = await pool.query(query, [userId]);
-      res.json(result.rows[0]);
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-      res.status(500).json({ error: 'Server error' });
-    }
-  },
-
-  // Update log
-  async update(req, res) {
-    try {
-      const { log_id } = req.params;
-      const userId = req.user.userId;
-      const updates = req.body;
-
-      // Verify ownership
-      const checkQuery = `
-        SELECT al.* FROM student_activity_logs al
-        INNER JOIN students s ON al.student_id = s.student_id
-        WHERE al.log_id = $1 AND s.user_id = $2
-      `;
-      const checkResult = await pool.query(checkQuery, [log_id, userId]);
-
-      if (checkResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Log not found' });
-      }
-
-      const fields = [];
-      const values = [];
-      let paramCount = 1;
-
-      Object.keys(updates).forEach(key => {
-        fields.push(`${key} = $${paramCount}`);
-        values.push(updates[key]);
-        paramCount++;
-      });
-
-      values.push(log_id);
-
-      const query = `
-        UPDATE student_activity_logs 
-        SET ${fields.join(', ')}
-        WHERE log_id = $${paramCount}
-        RETURNING *
-      `;
-
-      const result = await pool.query(query, values);
-      res.json(result.rows[0]);
-    } catch (error) {
-      console.error('Error updating log:', error);
-      res.status(500).json({ error: 'Server error' });
-    }
-  },
-
-  // Delete log
-  async delete(req, res) {
-    try {
-      const { log_id } = req.params;
-      const userId = req.user.userId;
-
-      // Verify ownership and get practice hours
-      const checkQuery = `
-        SELECT al.practice_hours, s.student_id 
-        FROM student_activity_logs al
-        INNER JOIN students s ON al.student_id = s.student_id
-        WHERE al.log_id = $1 AND s.user_id = $2
-      `;
-      const checkResult = await pool.query(checkQuery, [log_id, userId]);
-
-      if (checkResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Log not found' });
-      }
-
-      const { practice_hours, student_id } = checkResult.rows[0];
-
-      // Delete log
-      await pool.query('DELETE FROM student_activity_logs WHERE log_id = $1', [log_id]);
-
-      // Update total practice hours
-      await pool.query(
-        'UPDATE students SET total_practice_hours = total_practice_hours - $1 WHERE student_id = $2',
-        [practice_hours, student_id]
-      );
-
-      res.json({ message: 'Log deleted successfully' });
-    } catch (error) {
-      console.error('Error deleting log:', error);
-      res.status(500).json({ error: 'Server error' });
-    }
-  }
+const requireStudentId = async (userId) => {
+  const studentId = await Student.idForUser(userId);
+  if (!studentId) throw AppError.notFound('Student not found');
+  return studentId;
 };
 
-module.exports = activityLogController;
+const duplicateDate = (err) => {
+  if (err.code === '23505') throw AppError.conflict('You already have a log for this date. Edit it instead.');
+  throw err;
+};
+
+const activityLogController = {
+  // POST /api/students/activity-logs
+  async create(req, res) {
+    const studentId = await requireStudentId(req.user.userId);
+    const b = req.body;
+    const hours = b.practice_hours ?? 0;
+
+    const log = await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        `INSERT INTO student_activity_logs
+           (student_id, log_date, activities_done, performances, practice_hours, notes, mood)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [studentId, b.log_date, b.activities_done || null, b.performances || 'None', hours, b.notes || null, b.mood || null]
+      );
+      await client.query(
+        `UPDATE students SET total_practice_hours = COALESCE(total_practice_hours, 0) + $1,
+                             updated_at = CURRENT_TIMESTAMP
+          WHERE student_id = $2`,
+        [hours, studentId]
+      );
+      return rows[0];
+    }).catch(duplicateDate);
+
+    res.status(201).json(log);
+  },
+
+  // GET /api/students/activity-logs
+  async getAll(req, res) {
+    const { rows } = await pool.query(
+      `SELECT al.* FROM student_activity_logs al
+         JOIN students s ON al.student_id = s.student_id
+        WHERE s.user_id = $1
+        ORDER BY al.log_date DESC`,
+      [req.user.userId]
+    );
+    res.json(rows);
+  },
+
+  // GET /api/students/activity-logs/stats
+  async getStats(req, res) {
+    const { rows } = await pool.query(
+      `SELECT COALESCE(SUM(practice_hours), 0)::float AS total_practice_hours,
+              COALESCE(ROUND(AVG(practice_hours), 2), 0)::float AS avg_practice_hours,
+              COUNT(*) FILTER (WHERE COALESCE(performances, 'None') <> 'None')::int AS total_performances,
+              COUNT(*)::int AS total_logs,
+              COUNT(*) FILTER (WHERE log_date >= CURRENT_DATE - INTERVAL '7 days')::int AS this_week_logs
+         FROM student_activity_logs al
+         JOIN students s ON al.student_id = s.student_id
+        WHERE s.user_id = $1`,
+      [req.user.userId]
+    );
+    res.json(rows[0]);
+  },
+
+  // PUT /api/students/activity-logs/:log_id
+  async update(req, res) {
+    const studentId = await requireStudentId(req.user.userId);
+    const updates = req.body; // already stripped to known keys by the validator
+
+    const sets = [];
+    const values = [];
+    for (const column of UPDATABLE_COLUMNS) {
+      if (updates[column] !== undefined) {
+        values.push(updates[column]);
+        sets.push(`${column} = $${values.length}`);
+      }
+    }
+    if (!sets.length) throw AppError.badRequest('No valid fields to update');
+
+    const log = await withTransaction(async (client) => {
+      // Ownership check and row lock in one statement.
+      const { rows: existing } = await client.query(
+        'SELECT practice_hours FROM student_activity_logs WHERE log_id = $1 AND student_id = $2 FOR UPDATE',
+        [req.params.log_id, studentId]
+      );
+      if (!existing.length) throw AppError.notFound('Log not found');
+
+      values.push(req.params.log_id, studentId);
+      const { rows } = await client.query(
+        `UPDATE student_activity_logs SET ${sets.join(', ')}
+          WHERE log_id = $${values.length - 1} AND student_id = $${values.length}
+          RETURNING *`,
+        values
+      );
+
+      if (updates.practice_hours !== undefined) {
+        const delta = Number(updates.practice_hours) - Number(existing[0].practice_hours || 0);
+        await client.query(
+          `UPDATE students SET total_practice_hours = GREATEST(COALESCE(total_practice_hours, 0) + $1, 0)
+            WHERE student_id = $2`,
+          [delta, studentId]
+        );
+      }
+      return rows[0];
+    }).catch(duplicateDate);
+
+    res.json(log);
+  },
+
+  // DELETE /api/students/activity-logs/:log_id
+  async delete(req, res) {
+    const studentId = await requireStudentId(req.user.userId);
+    await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        'DELETE FROM student_activity_logs WHERE log_id = $1 AND student_id = $2 RETURNING practice_hours',
+        [req.params.log_id, studentId]
+      );
+      if (!rows.length) throw AppError.notFound('Log not found');
+      await client.query(
+        `UPDATE students SET total_practice_hours = GREATEST(COALESCE(total_practice_hours, 0) - $1, 0)
+          WHERE student_id = $2`,
+        [rows[0].practice_hours || 0, studentId]
+      );
+    });
+    res.json({ message: 'Log deleted successfully' });
+  },
+};
+
+module.exports = wrapController(activityLogController);
+module.exports.UPDATABLE_COLUMNS = UPDATABLE_COLUMNS;

@@ -1,124 +1,104 @@
 const pool = require('../config/database');
+const AppError = require('../utils/AppError');
+const { wrapController } = require('../utils/asyncHandler');
+
+// Canonical columns plus the aliases the frontend uses (id, content, is_important).
+const NOTICE_COLUMNS = `
+  n.notice_id, n.notice_id AS id, n.title, n.description, n.description AS content,
+  n.target_audience, n.category, n.priority, (n.priority = 'high') AS is_important,
+  n.status, n.is_active, n.expiry_date, n.created_by, n.created_at, n.updated_at`;
+
+const priorityFrom = (body) => body.priority || (body.is_important ? 'high' : 'normal');
 
 const noticeController = {
-  // Get all published notices (optionally filtered by category and audience)
-  getNotices: async (req, res) => {
-    try {
-      const { category, target_audience } = req.query;
-      
-      let query = `
-        SELECT * FROM notices 
-        WHERE status = 'published'
-      `;
-      const values = [];
+  // GET /api/notices — published, active, unexpired notices visible to the viewer.
+  // Guests see "all" notices; logged-in users also see notices for their role;
+  // admins see everything published.
+  async getNotices(req, res) {
+    const { category, target_audience } = req.validatedQuery || {};
+    const values = [];
+    const where = [
+      "n.status = 'published'",
+      'n.is_active = true',
+      '(n.expiry_date IS NULL OR n.expiry_date >= CURRENT_DATE)',
+    ];
 
-      if (category && category !== 'all') {
-        values.push(category);
-        query += ` AND category = $${values.length}`;
-      }
-
-      if (target_audience && target_audience !== 'all') {
-        values.push(target_audience);
-        query += ` AND (target_audience = 'all' OR target_audience = $${values.length})`;
-      }
-
-      query += ` ORDER BY created_at DESC`;
-
-      const result = await pool.query(query, values);
-      res.json(result.rows);
-    } catch (err) {
-      console.error('Error fetching notices:', err);
-      res.status(500).json({ message: 'Server error while fetching notices' });
+    const role = req.user?.role;
+    if (role !== 'admin') {
+      const audiences = ['all'];
+      if (role === 'student') audiences.push('students');
+      if (role === 'teacher') audiences.push('teachers');
+      values.push(audiences);
+      where.push(`n.target_audience = ANY($${values.length})`);
     }
+    if (category) {
+      values.push(category);
+      where.push(`n.category = $${values.length}`);
+    }
+    if (target_audience) {
+      values.push(target_audience);
+      where.push(`n.target_audience IN ('all', $${values.length})`);
+    }
+
+    const { rows } = await pool.query(
+      `SELECT ${NOTICE_COLUMNS} FROM notices n WHERE ${where.join(' AND ')}
+        ORDER BY (n.priority = 'high') DESC, n.created_at DESC`,
+      values
+    );
+    res.json(rows);
   },
 
-  // Admin: Get all notices including drafts
-  getAllAdminNotices: async (req, res) => {
-    try {
-      const query = `SELECT * FROM notices ORDER BY created_at DESC`;
-      const result = await pool.query(query);
-      res.json(result.rows);
-    } catch (err) {
-      console.error('Error fetching admin notices:', err);
-      res.status(500).json({ message: 'Server error while fetching admin notices' });
-    }
+  // GET /api/notices/admin — everything, including drafts and inactive
+  async getAllAdminNotices(req, res) {
+    const { rows } = await pool.query(`SELECT ${NOTICE_COLUMNS} FROM notices n ORDER BY n.created_at DESC`);
+    res.json(rows);
   },
 
-  // Create new notice
-  createNotice: async (req, res) => {
-    try {
-      const { title, content, target_audience, category, is_important, status } = req.body;
-      
-      const query = `
-        INSERT INTO notices 
-        (title, content, target_audience, category, is_important, status) 
-        VALUES ($1, $2, $3, $4, $5, $6) 
-        RETURNING *
-      `;
-      
-      const values = [
-        title, 
-        content, 
-        target_audience || 'all', 
-        category || 'general', 
-        is_important || false, 
-        status || 'published'
-      ];
-
-      const result = await pool.query(query, values);
-      res.status(201).json(result.rows[0]);
-    } catch (err) {
-      console.error('Error creating notice:', err);
-      res.status(500).json({ message: 'Server error while creating notice' });
-    }
+  // POST /api/notices
+  async createNotice(req, res) {
+    const b = req.body;
+    const { rows } = await pool.query(
+      `INSERT INTO notices
+         (title, description, target_audience, category, priority, status, expiry_date, is_active, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, true), $9)
+       RETURNING notice_id`,
+      [
+        b.title, b.content, b.target_audience, b.category, priorityFrom(b), b.status,
+        b.expiry_date || null, b.is_active ?? null, req.user.userId,
+      ]
+    );
+    const { rows: created } = await pool.query(`SELECT ${NOTICE_COLUMNS} FROM notices n WHERE n.notice_id = $1`, [
+      rows[0].notice_id,
+    ]);
+    res.status(201).json(created[0]);
   },
 
-  // Update notice
-  updateNotice: async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { title, content, target_audience, category, is_important, status } = req.body;
-
-      const query = `
-        UPDATE notices 
-        SET title = $1, content = $2, target_audience = $3, 
-            category = $4, is_important = $5, status = $6, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $7 
-        RETURNING *
-      `;
-      
-      const values = [title, content, target_audience, category, is_important, status, id];
-      const result = await pool.query(query, values);
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({ message: 'Notice not found' });
-      }
-
-      res.json(result.rows[0]);
-    } catch (err) {
-      console.error('Error updating notice:', err);
-      res.status(500).json({ message: 'Server error while updating notice' });
-    }
+  // PUT /api/notices/:id
+  async updateNotice(req, res) {
+    const b = req.body;
+    const { rowCount } = await pool.query(
+      `UPDATE notices SET
+         title = $1, description = $2, target_audience = $3, category = $4, priority = $5,
+         status = $6, expiry_date = $7, is_active = COALESCE($8, is_active), updated_at = CURRENT_TIMESTAMP
+       WHERE notice_id = $9`,
+      [
+        b.title, b.content, b.target_audience, b.category, priorityFrom(b), b.status,
+        b.expiry_date || null, b.is_active ?? null, req.params.id,
+      ]
+    );
+    if (!rowCount) throw AppError.notFound('Notice not found');
+    const { rows } = await pool.query(`SELECT ${NOTICE_COLUMNS} FROM notices n WHERE n.notice_id = $1`, [
+      req.params.id,
+    ]);
+    res.json(rows[0]);
   },
 
-  // Delete notice
-  deleteNotice: async (req, res) => {
-    try {
-      const { id } = req.params;
-      
-      const query = `DELETE FROM notices WHERE id = $1 RETURNING *`;
-      const result = await pool.query(query, [id]);
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({ message: 'Notice not found' });
-      }
-
-      res.json({ message: 'Notice deleted successfully', deleted: result.rows[0] });
-    } catch (err) {
-      console.error('Error deleting notice:', err);
-      res.status(500).json({ message: 'Server error while deleting notice' });
-    }
-  }
+  // DELETE /api/notices/:id
+  async deleteNotice(req, res) {
+    const { rows } = await pool.query('DELETE FROM notices WHERE notice_id = $1 RETURNING notice_id', [req.params.id]);
+    if (!rows.length) throw AppError.notFound('Notice not found');
+    res.json({ message: 'Notice deleted successfully', deleted: { id: rows[0].notice_id } });
+  },
 };
 
-module.exports = noticeController;
+module.exports = wrapController(noticeController);

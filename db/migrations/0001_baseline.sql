@@ -1,23 +1,15 @@
-﻿--
+-- 0001 baseline: schema of the production database as dumped on 2026-04-06
+-- (pg_dump 18.1, schema only). Source of truth for the existing structure.
+--
+-- On an EXISTING database this migration is recorded as applied without
+-- being executed (see db/migrate.js). It only runs on an empty database.
+
+--
 -- PostgreSQL database dump
 --
 
-\restrict hpxYJsLXYeTwLkGuxrW4rs5K4kUhCIgIZVXZwYWJdTHkUnwVIUdyMYPtMkIonmu
-
 -- Dumped from database version 18.1
 -- Dumped by pg_dump version 18.1
-
-SET statement_timeout = 0;
-SET lock_timeout = 0;
-SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
-SET client_encoding = 'UTF8';
-SET standard_conforming_strings = on;
-SELECT pg_catalog.set_config('search_path', '', false);
-SET check_function_bodies = false;
-SET xmloption = content;
-SET client_min_messages = warning;
-SET row_security = off;
 
 --
 -- Name: check_batch_capacity(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -43,9 +35,6 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-
-
-ALTER FUNCTION public.check_batch_capacity() OWNER TO postgres;
 
 --
 -- Name: generate_roll_number(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -85,9 +74,6 @@ BEGIN
 END;
 $_$;
 
-
-ALTER FUNCTION public.generate_roll_number() OWNER TO postgres;
-
 --
 -- Name: update_batch_enrollment(); Type: FUNCTION; Schema: public; Owner: postgres
 --
@@ -117,13 +103,6 @@ BEGIN
 END;
 $$;
 
-
-ALTER FUNCTION public.update_batch_enrollment() OWNER TO postgres;
-
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
-
 --
 -- Name: attendance; Type: TABLE; Schema: public; Owner: postgres
 --
@@ -140,9 +119,6 @@ CREATE TABLE public.attendance (
     CONSTRAINT attendance_status_check CHECK (((status)::text = ANY ((ARRAY['present'::character varying, 'absent'::character varying, 'late'::character varying])::text[])))
 );
 
-
-ALTER TABLE public.attendance OWNER TO postgres;
-
 --
 -- Name: attendance_attendance_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -155,15 +131,11 @@ CREATE SEQUENCE public.attendance_attendance_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.attendance_attendance_id_seq OWNER TO postgres;
-
 --
 -- Name: attendance_attendance_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.attendance_attendance_id_seq OWNED BY public.attendance.attendance_id;
-
 
 --
 -- Name: batch_transfers; Type: TABLE; Schema: public; Owner: postgres
@@ -181,15 +153,11 @@ CREATE TABLE public.batch_transfers (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
-
-ALTER TABLE public.batch_transfers OWNER TO postgres;
-
 --
 -- Name: TABLE batch_transfers; Type: COMMENT; Schema: public; Owner: postgres
 --
 
 COMMENT ON TABLE public.batch_transfers IS 'Tracks temporary (one-day) or permanent teacher substitutions';
-
 
 --
 -- Name: batch_transfers_transfer_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
@@ -203,15 +171,11 @@ CREATE SEQUENCE public.batch_transfers_transfer_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.batch_transfers_transfer_id_seq OWNER TO postgres;
-
 --
 -- Name: batch_transfers_transfer_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.batch_transfers_transfer_id_seq OWNED BY public.batch_transfers.transfer_id;
-
 
 --
 -- Name: batches; Type: TABLE; Schema: public; Owner: postgres
@@ -235,9 +199,6 @@ CREATE TABLE public.batches (
     CONSTRAINT batches_max_students_check CHECK (((max_students > 0) AND (max_students <= 15)))
 );
 
-
-ALTER TABLE public.batches OWNER TO postgres;
-
 --
 -- Name: batches_batch_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -250,15 +211,11 @@ CREATE SEQUENCE public.batches_batch_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.batches_batch_id_seq OWNER TO postgres;
-
 --
 -- Name: batches_batch_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.batches_batch_id_seq OWNED BY public.batches.batch_id;
-
 
 --
 -- Name: events; Type: TABLE; Schema: public; Owner: postgres
@@ -282,9 +239,6 @@ CREATE TABLE public.events (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
-
-ALTER TABLE public.events OWNER TO postgres;
-
 --
 -- Name: events_event_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -297,15 +251,11 @@ CREATE SEQUENCE public.events_event_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.events_event_id_seq OWNER TO postgres;
-
 --
 -- Name: events_event_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.events_event_id_seq OWNED BY public.events.event_id;
-
 
 --
 -- Name: fee_payments; Type: TABLE; Schema: public; Owner: postgres
@@ -333,9 +283,6 @@ CREATE TABLE public.fee_payments (
     CONSTRAINT fee_payments_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'completed'::character varying, 'failed'::character varying, 'refunded'::character varying])::text[])))
 );
 
-
-ALTER TABLE public.fee_payments OWNER TO postgres;
-
 --
 -- Name: fee_payments_payment_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -348,15 +295,11 @@ CREATE SEQUENCE public.fee_payments_payment_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.fee_payments_payment_id_seq OWNER TO postgres;
-
 --
 -- Name: fee_payments_payment_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.fee_payments_payment_id_seq OWNED BY public.fee_payments.payment_id;
-
 
 --
 -- Name: fee_structure; Type: TABLE; Schema: public; Owner: postgres
@@ -377,9 +320,6 @@ CREATE TABLE public.fee_structure (
     CONSTRAINT fee_structure_payment_window_check CHECK (((payment_window)::text = ANY ((ARRAY['monthly'::character varying, 'quarterly'::character varying, 'half_yearly'::character varying, 'yearly'::character varying])::text[])))
 );
 
-
-ALTER TABLE public.fee_structure OWNER TO postgres;
-
 --
 -- Name: fee_structure_fee_structure_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -392,15 +332,11 @@ CREATE SEQUENCE public.fee_structure_fee_structure_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.fee_structure_fee_structure_id_seq OWNER TO postgres;
-
 --
 -- Name: fee_structure_fee_structure_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.fee_structure_fee_structure_id_seq OWNED BY public.fee_structure.fee_structure_id;
-
 
 --
 -- Name: gallery; Type: TABLE; Schema: public; Owner: postgres
@@ -420,9 +356,6 @@ CREATE TABLE public.gallery (
     CONSTRAINT gallery_media_type_check CHECK (((media_type)::text = ANY ((ARRAY['photo'::character varying, 'video'::character varying])::text[])))
 );
 
-
-ALTER TABLE public.gallery OWNER TO postgres;
-
 --
 -- Name: gallery_gallery_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -435,15 +368,11 @@ CREATE SEQUENCE public.gallery_gallery_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.gallery_gallery_id_seq OWNER TO postgres;
-
 --
 -- Name: gallery_gallery_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.gallery_gallery_id_seq OWNED BY public.gallery.gallery_id;
-
 
 --
 -- Name: gallery_requests; Type: TABLE; Schema: public; Owner: postgres
@@ -466,15 +395,11 @@ CREATE TABLE public.gallery_requests (
     CONSTRAINT gallery_requests_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying])::text[])))
 );
 
-
-ALTER TABLE public.gallery_requests OWNER TO postgres;
-
 --
 -- Name: TABLE gallery_requests; Type: COMMENT; Schema: public; Owner: postgres
 --
 
 COMMENT ON TABLE public.gallery_requests IS 'Student upload requests requiring admin approval';
-
 
 --
 -- Name: gallery_requests_request_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
@@ -488,15 +413,11 @@ CREATE SEQUENCE public.gallery_requests_request_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.gallery_requests_request_id_seq OWNER TO postgres;
-
 --
 -- Name: gallery_requests_request_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.gallery_requests_request_id_seq OWNED BY public.gallery_requests.request_id;
-
 
 --
 -- Name: learning_resources; Type: TABLE; Schema: public; Owner: postgres
@@ -516,9 +437,6 @@ CREATE TABLE public.learning_resources (
     CONSTRAINT learning_resources_resource_type_check CHECK (((resource_type)::text = ANY ((ARRAY['video'::character varying, 'audio'::character varying, 'document'::character varying, 'image'::character varying])::text[])))
 );
 
-
-ALTER TABLE public.learning_resources OWNER TO postgres;
-
 --
 -- Name: learning_resources_resource_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -531,15 +449,11 @@ CREATE SEQUENCE public.learning_resources_resource_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.learning_resources_resource_id_seq OWNER TO postgres;
-
 --
 -- Name: learning_resources_resource_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.learning_resources_resource_id_seq OWNED BY public.learning_resources.resource_id;
-
 
 --
 -- Name: levels; Type: TABLE; Schema: public; Owner: postgres
@@ -554,9 +468,6 @@ CREATE TABLE public.levels (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
-
-ALTER TABLE public.levels OWNER TO postgres;
-
 --
 -- Name: levels_level_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -569,15 +480,11 @@ CREATE SEQUENCE public.levels_level_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.levels_level_id_seq OWNER TO postgres;
-
 --
 -- Name: levels_level_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.levels_level_id_seq OWNED BY public.levels.level_id;
-
 
 --
 -- Name: makeup_class_bookings; Type: TABLE; Schema: public; Owner: postgres
@@ -597,15 +504,11 @@ CREATE TABLE public.makeup_class_bookings (
     CONSTRAINT makeup_class_bookings_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying, 'completed'::character varying])::text[])))
 );
 
-
-ALTER TABLE public.makeup_class_bookings OWNER TO postgres;
-
 --
 -- Name: TABLE makeup_class_bookings; Type: COMMENT; Schema: public; Owner: postgres
 --
 
 COMMENT ON TABLE public.makeup_class_bookings IS 'Allows absent students to attend other batches for makeup';
-
 
 --
 -- Name: makeup_class_bookings_booking_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
@@ -619,15 +522,11 @@ CREATE SEQUENCE public.makeup_class_bookings_booking_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.makeup_class_bookings_booking_id_seq OWNER TO postgres;
-
 --
 -- Name: makeup_class_bookings_booking_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.makeup_class_bookings_booking_id_seq OWNED BY public.makeup_class_bookings.booking_id;
-
 
 --
 -- Name: notices; Type: TABLE; Schema: public; Owner: postgres
@@ -647,9 +546,6 @@ CREATE TABLE public.notices (
     CONSTRAINT notices_target_audience_check CHECK (((target_audience)::text = ANY ((ARRAY['all'::character varying, 'students'::character varying, 'teachers'::character varying])::text[])))
 );
 
-
-ALTER TABLE public.notices OWNER TO postgres;
-
 --
 -- Name: notices_notice_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -662,15 +558,11 @@ CREATE SEQUENCE public.notices_notice_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.notices_notice_id_seq OWNER TO postgres;
-
 --
 -- Name: notices_notice_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.notices_notice_id_seq OWNED BY public.notices.notice_id;
-
 
 --
 -- Name: student_activity_logs; Type: TABLE; Schema: public; Owner: postgres
@@ -688,9 +580,6 @@ CREATE TABLE public.student_activity_logs (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
-
-ALTER TABLE public.student_activity_logs OWNER TO postgres;
-
 --
 -- Name: student_activity_logs_log_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -703,15 +592,11 @@ CREATE SEQUENCE public.student_activity_logs_log_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.student_activity_logs_log_id_seq OWNER TO postgres;
-
 --
 -- Name: student_activity_logs_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.student_activity_logs_log_id_seq OWNED BY public.student_activity_logs.log_id;
-
 
 --
 -- Name: student_batches; Type: TABLE; Schema: public; Owner: postgres
@@ -728,9 +613,6 @@ CREATE TABLE public.student_batches (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
-
-ALTER TABLE public.student_batches OWNER TO postgres;
-
 --
 -- Name: student_batches_student_batch_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -743,15 +625,11 @@ CREATE SEQUENCE public.student_batches_student_batch_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.student_batches_student_batch_id_seq OWNER TO postgres;
-
 --
 -- Name: student_batches_student_batch_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.student_batches_student_batch_id_seq OWNED BY public.student_batches.student_batch_id;
-
 
 --
 -- Name: student_status_changes; Type: TABLE; Schema: public; Owner: postgres
@@ -771,9 +649,6 @@ CREATE TABLE public.student_status_changes (
     CONSTRAINT student_status_changes_change_type_check CHECK (((change_type)::text = ANY ((ARRAY['enrollment'::character varying, 'discontinuation'::character varying, 'rejoining'::character varying, 'batch_switch'::character varying])::text[])))
 );
 
-
-ALTER TABLE public.student_status_changes OWNER TO postgres;
-
 --
 -- Name: student_status_changes_change_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -786,15 +661,11 @@ CREATE SEQUENCE public.student_status_changes_change_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.student_status_changes_change_id_seq OWNER TO postgres;
-
 --
 -- Name: student_status_changes_change_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.student_status_changes_change_id_seq OWNED BY public.student_status_changes.change_id;
-
 
 --
 -- Name: students; Type: TABLE; Schema: public; Owner: postgres
@@ -828,15 +699,11 @@ CREATE TABLE public.students (
     CONSTRAINT students_payment_window_check CHECK (((payment_window)::text = ANY ((ARRAY['monthly'::character varying, 'quarterly'::character varying, 'half_yearly'::character varying, 'yearly'::character varying])::text[])))
 );
 
-
-ALTER TABLE public.students OWNER TO postgres;
-
 --
 -- Name: TABLE students; Type: COMMENT; Schema: public; Owner: postgres
 --
 
 COMMENT ON TABLE public.students IS 'Stores all student information with auto-generated roll numbers based on level';
-
 
 --
 -- Name: COLUMN students.roll_number; Type: COMMENT; Schema: public; Owner: postgres
@@ -844,13 +711,11 @@ COMMENT ON TABLE public.students IS 'Stores all student information with auto-ge
 
 COMMENT ON COLUMN public.students.roll_number IS 'Auto-generated format: PP1, VP15, etc. based on level_code';
 
-
 --
 -- Name: COLUMN students.payment_window; Type: COMMENT; Schema: public; Owner: postgres
 --
 
 COMMENT ON COLUMN public.students.payment_window IS 'Student preferred payment frequency with discount options';
-
 
 --
 -- Name: students_student_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
@@ -864,15 +729,11 @@ CREATE SEQUENCE public.students_student_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.students_student_id_seq OWNER TO postgres;
-
 --
 -- Name: students_student_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.students_student_id_seq OWNED BY public.students.student_id;
-
 
 --
 -- Name: teacher_reviews; Type: TABLE; Schema: public; Owner: postgres
@@ -900,15 +761,11 @@ CREATE TABLE public.teacher_reviews (
     CONSTRAINT teacher_reviews_technique_rating_check CHECK (((technique_rating >= 1) AND (technique_rating <= 5)))
 );
 
-
-ALTER TABLE public.teacher_reviews OWNER TO postgres;
-
 --
 -- Name: TABLE teacher_reviews; Type: COMMENT; Schema: public; Owner: postgres
 --
 
 COMMENT ON TABLE public.teacher_reviews IS 'Monthly structured reviews from teachers to students';
-
 
 --
 -- Name: teacher_reviews_review_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
@@ -922,15 +779,11 @@ CREATE SEQUENCE public.teacher_reviews_review_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.teacher_reviews_review_id_seq OWNER TO postgres;
-
 --
 -- Name: teacher_reviews_review_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.teacher_reviews_review_id_seq OWNED BY public.teacher_reviews.review_id;
-
 
 --
 -- Name: teachers; Type: TABLE; Schema: public; Owner: postgres
@@ -956,9 +809,6 @@ CREATE TABLE public.teachers (
     CONSTRAINT teachers_average_rating_check CHECK (((average_rating >= (0)::numeric) AND (average_rating <= (5)::numeric)))
 );
 
-
-ALTER TABLE public.teachers OWNER TO postgres;
-
 --
 -- Name: teachers_teacher_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -971,15 +821,11 @@ CREATE SEQUENCE public.teachers_teacher_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.teachers_teacher_id_seq OWNER TO postgres;
-
 --
 -- Name: teachers_teacher_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.teachers_teacher_id_seq OWNED BY public.teachers.teacher_id;
-
 
 --
 -- Name: users; Type: TABLE; Schema: public; Owner: postgres
@@ -997,9 +843,6 @@ CREATE TABLE public.users (
     CONSTRAINT users_role_check CHECK (((role)::text = ANY ((ARRAY['student'::character varying, 'teacher'::character varying, 'admin'::character varying])::text[])))
 );
 
-
-ALTER TABLE public.users OWNER TO postgres;
-
 --
 -- Name: users_user_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
@@ -1012,15 +855,11 @@ CREATE SEQUENCE public.users_user_id_seq
     NO MAXVALUE
     CACHE 1;
 
-
-ALTER SEQUENCE public.users_user_id_seq OWNER TO postgres;
-
 --
 -- Name: users_user_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.users_user_id_seq OWNED BY public.users.user_id;
-
 
 --
 -- Name: attendance attendance_id; Type: DEFAULT; Schema: public; Owner: postgres
@@ -1028,13 +867,11 @@ ALTER SEQUENCE public.users_user_id_seq OWNED BY public.users.user_id;
 
 ALTER TABLE ONLY public.attendance ALTER COLUMN attendance_id SET DEFAULT nextval('public.attendance_attendance_id_seq'::regclass);
 
-
 --
 -- Name: batch_transfers transfer_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.batch_transfers ALTER COLUMN transfer_id SET DEFAULT nextval('public.batch_transfers_transfer_id_seq'::regclass);
-
 
 --
 -- Name: batches batch_id; Type: DEFAULT; Schema: public; Owner: postgres
@@ -1042,13 +879,11 @@ ALTER TABLE ONLY public.batch_transfers ALTER COLUMN transfer_id SET DEFAULT nex
 
 ALTER TABLE ONLY public.batches ALTER COLUMN batch_id SET DEFAULT nextval('public.batches_batch_id_seq'::regclass);
 
-
 --
 -- Name: events event_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.events ALTER COLUMN event_id SET DEFAULT nextval('public.events_event_id_seq'::regclass);
-
 
 --
 -- Name: fee_payments payment_id; Type: DEFAULT; Schema: public; Owner: postgres
@@ -1056,13 +891,11 @@ ALTER TABLE ONLY public.events ALTER COLUMN event_id SET DEFAULT nextval('public
 
 ALTER TABLE ONLY public.fee_payments ALTER COLUMN payment_id SET DEFAULT nextval('public.fee_payments_payment_id_seq'::regclass);
 
-
 --
 -- Name: fee_structure fee_structure_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.fee_structure ALTER COLUMN fee_structure_id SET DEFAULT nextval('public.fee_structure_fee_structure_id_seq'::regclass);
-
 
 --
 -- Name: gallery gallery_id; Type: DEFAULT; Schema: public; Owner: postgres
@@ -1070,13 +903,11 @@ ALTER TABLE ONLY public.fee_structure ALTER COLUMN fee_structure_id SET DEFAULT 
 
 ALTER TABLE ONLY public.gallery ALTER COLUMN gallery_id SET DEFAULT nextval('public.gallery_gallery_id_seq'::regclass);
 
-
 --
 -- Name: gallery_requests request_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.gallery_requests ALTER COLUMN request_id SET DEFAULT nextval('public.gallery_requests_request_id_seq'::regclass);
-
 
 --
 -- Name: learning_resources resource_id; Type: DEFAULT; Schema: public; Owner: postgres
@@ -1084,13 +915,11 @@ ALTER TABLE ONLY public.gallery_requests ALTER COLUMN request_id SET DEFAULT nex
 
 ALTER TABLE ONLY public.learning_resources ALTER COLUMN resource_id SET DEFAULT nextval('public.learning_resources_resource_id_seq'::regclass);
 
-
 --
 -- Name: levels level_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.levels ALTER COLUMN level_id SET DEFAULT nextval('public.levels_level_id_seq'::regclass);
-
 
 --
 -- Name: makeup_class_bookings booking_id; Type: DEFAULT; Schema: public; Owner: postgres
@@ -1098,13 +927,11 @@ ALTER TABLE ONLY public.levels ALTER COLUMN level_id SET DEFAULT nextval('public
 
 ALTER TABLE ONLY public.makeup_class_bookings ALTER COLUMN booking_id SET DEFAULT nextval('public.makeup_class_bookings_booking_id_seq'::regclass);
 
-
 --
 -- Name: notices notice_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.notices ALTER COLUMN notice_id SET DEFAULT nextval('public.notices_notice_id_seq'::regclass);
-
 
 --
 -- Name: student_activity_logs log_id; Type: DEFAULT; Schema: public; Owner: postgres
@@ -1112,13 +939,11 @@ ALTER TABLE ONLY public.notices ALTER COLUMN notice_id SET DEFAULT nextval('publ
 
 ALTER TABLE ONLY public.student_activity_logs ALTER COLUMN log_id SET DEFAULT nextval('public.student_activity_logs_log_id_seq'::regclass);
 
-
 --
 -- Name: student_batches student_batch_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.student_batches ALTER COLUMN student_batch_id SET DEFAULT nextval('public.student_batches_student_batch_id_seq'::regclass);
-
 
 --
 -- Name: student_status_changes change_id; Type: DEFAULT; Schema: public; Owner: postgres
@@ -1126,13 +951,11 @@ ALTER TABLE ONLY public.student_batches ALTER COLUMN student_batch_id SET DEFAUL
 
 ALTER TABLE ONLY public.student_status_changes ALTER COLUMN change_id SET DEFAULT nextval('public.student_status_changes_change_id_seq'::regclass);
 
-
 --
 -- Name: students student_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.students ALTER COLUMN student_id SET DEFAULT nextval('public.students_student_id_seq'::regclass);
-
 
 --
 -- Name: teacher_reviews review_id; Type: DEFAULT; Schema: public; Owner: postgres
@@ -1140,20 +963,17 @@ ALTER TABLE ONLY public.students ALTER COLUMN student_id SET DEFAULT nextval('pu
 
 ALTER TABLE ONLY public.teacher_reviews ALTER COLUMN review_id SET DEFAULT nextval('public.teacher_reviews_review_id_seq'::regclass);
 
-
 --
 -- Name: teachers teacher_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.teachers ALTER COLUMN teacher_id SET DEFAULT nextval('public.teachers_teacher_id_seq'::regclass);
 
-
 --
 -- Name: users user_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.users ALTER COLUMN user_id SET DEFAULT nextval('public.users_user_id_seq'::regclass);
-
 
 --
 -- Name: attendance attendance_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1162,14 +982,12 @@ ALTER TABLE ONLY public.users ALTER COLUMN user_id SET DEFAULT nextval('public.u
 ALTER TABLE ONLY public.attendance
     ADD CONSTRAINT attendance_pkey PRIMARY KEY (attendance_id);
 
-
 --
 -- Name: attendance attendance_student_id_batch_id_attendance_date_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.attendance
     ADD CONSTRAINT attendance_student_id_batch_id_attendance_date_key UNIQUE (student_id, batch_id, attendance_date);
-
 
 --
 -- Name: batch_transfers batch_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1178,14 +996,12 @@ ALTER TABLE ONLY public.attendance
 ALTER TABLE ONLY public.batch_transfers
     ADD CONSTRAINT batch_transfers_pkey PRIMARY KEY (transfer_id);
 
-
 --
 -- Name: batches batches_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.batches
     ADD CONSTRAINT batches_pkey PRIMARY KEY (batch_id);
-
 
 --
 -- Name: events events_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1194,14 +1010,12 @@ ALTER TABLE ONLY public.batches
 ALTER TABLE ONLY public.events
     ADD CONSTRAINT events_pkey PRIMARY KEY (event_id);
 
-
 --
 -- Name: fee_payments fee_payments_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.fee_payments
     ADD CONSTRAINT fee_payments_pkey PRIMARY KEY (payment_id);
-
 
 --
 -- Name: fee_structure fee_structure_level_id_payment_window_key; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1210,14 +1024,12 @@ ALTER TABLE ONLY public.fee_payments
 ALTER TABLE ONLY public.fee_structure
     ADD CONSTRAINT fee_structure_level_id_payment_window_key UNIQUE (level_id, payment_window);
 
-
 --
 -- Name: fee_structure fee_structure_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.fee_structure
     ADD CONSTRAINT fee_structure_pkey PRIMARY KEY (fee_structure_id);
-
 
 --
 -- Name: gallery gallery_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1226,14 +1038,12 @@ ALTER TABLE ONLY public.fee_structure
 ALTER TABLE ONLY public.gallery
     ADD CONSTRAINT gallery_pkey PRIMARY KEY (gallery_id);
 
-
 --
 -- Name: gallery_requests gallery_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.gallery_requests
     ADD CONSTRAINT gallery_requests_pkey PRIMARY KEY (request_id);
-
 
 --
 -- Name: learning_resources learning_resources_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1242,14 +1052,12 @@ ALTER TABLE ONLY public.gallery_requests
 ALTER TABLE ONLY public.learning_resources
     ADD CONSTRAINT learning_resources_pkey PRIMARY KEY (resource_id);
 
-
 --
 -- Name: levels levels_level_code_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.levels
     ADD CONSTRAINT levels_level_code_key UNIQUE (level_code);
-
 
 --
 -- Name: levels levels_level_number_key; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1258,14 +1066,12 @@ ALTER TABLE ONLY public.levels
 ALTER TABLE ONLY public.levels
     ADD CONSTRAINT levels_level_number_key UNIQUE (level_number);
 
-
 --
 -- Name: levels levels_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.levels
     ADD CONSTRAINT levels_pkey PRIMARY KEY (level_id);
-
 
 --
 -- Name: makeup_class_bookings makeup_class_bookings_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1274,14 +1080,12 @@ ALTER TABLE ONLY public.levels
 ALTER TABLE ONLY public.makeup_class_bookings
     ADD CONSTRAINT makeup_class_bookings_pkey PRIMARY KEY (booking_id);
 
-
 --
 -- Name: notices notices_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.notices
     ADD CONSTRAINT notices_pkey PRIMARY KEY (notice_id);
-
 
 --
 -- Name: student_activity_logs student_activity_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1290,14 +1094,12 @@ ALTER TABLE ONLY public.notices
 ALTER TABLE ONLY public.student_activity_logs
     ADD CONSTRAINT student_activity_logs_pkey PRIMARY KEY (log_id);
 
-
 --
 -- Name: student_activity_logs student_activity_logs_student_id_log_date_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.student_activity_logs
     ADD CONSTRAINT student_activity_logs_student_id_log_date_key UNIQUE (student_id, log_date);
-
 
 --
 -- Name: student_batches student_batches_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1306,14 +1108,12 @@ ALTER TABLE ONLY public.student_activity_logs
 ALTER TABLE ONLY public.student_batches
     ADD CONSTRAINT student_batches_pkey PRIMARY KEY (student_batch_id);
 
-
 --
 -- Name: student_batches student_batches_student_id_batch_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.student_batches
     ADD CONSTRAINT student_batches_student_id_batch_id_key UNIQUE (student_id, batch_id);
-
 
 --
 -- Name: student_status_changes student_status_changes_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1322,14 +1122,12 @@ ALTER TABLE ONLY public.student_batches
 ALTER TABLE ONLY public.student_status_changes
     ADD CONSTRAINT student_status_changes_pkey PRIMARY KEY (change_id);
 
-
 --
 -- Name: students students_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.students
     ADD CONSTRAINT students_pkey PRIMARY KEY (student_id);
-
 
 --
 -- Name: students students_roll_number_key; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1338,14 +1136,12 @@ ALTER TABLE ONLY public.students
 ALTER TABLE ONLY public.students
     ADD CONSTRAINT students_roll_number_key UNIQUE (roll_number);
 
-
 --
 -- Name: teacher_reviews teacher_reviews_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.teacher_reviews
     ADD CONSTRAINT teacher_reviews_pkey PRIMARY KEY (review_id);
-
 
 --
 -- Name: teacher_reviews teacher_reviews_student_id_teacher_id_review_month_review_y_key; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1354,14 +1150,12 @@ ALTER TABLE ONLY public.teacher_reviews
 ALTER TABLE ONLY public.teacher_reviews
     ADD CONSTRAINT teacher_reviews_student_id_teacher_id_review_month_review_y_key UNIQUE (student_id, teacher_id, review_month, review_year);
 
-
 --
 -- Name: teachers teachers_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.teachers
     ADD CONSTRAINT teachers_pkey PRIMARY KEY (teacher_id);
-
 
 --
 -- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -1370,7 +1164,6 @@ ALTER TABLE ONLY public.teachers
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_email_key UNIQUE (email);
 
-
 --
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
@@ -1378,13 +1171,11 @@ ALTER TABLE ONLY public.users
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (user_id);
 
-
 --
 -- Name: idx_attendance_date; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_attendance_date ON public.attendance USING btree (attendance_date);
-
 
 --
 -- Name: idx_attendance_student; Type: INDEX; Schema: public; Owner: postgres
@@ -1392,13 +1183,11 @@ CREATE INDEX idx_attendance_date ON public.attendance USING btree (attendance_da
 
 CREATE INDEX idx_attendance_student ON public.attendance USING btree (student_id);
 
-
 --
 -- Name: idx_batches_level; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_batches_level ON public.batches USING btree (level_id);
-
 
 --
 -- Name: idx_batches_teacher; Type: INDEX; Schema: public; Owner: postgres
@@ -1406,13 +1195,11 @@ CREATE INDEX idx_batches_level ON public.batches USING btree (level_id);
 
 CREATE INDEX idx_batches_teacher ON public.batches USING btree (teacher_id);
 
-
 --
 -- Name: idx_fee_payments_date; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_fee_payments_date ON public.fee_payments USING btree (payment_date);
-
 
 --
 -- Name: idx_fee_payments_student; Type: INDEX; Schema: public; Owner: postgres
@@ -1420,13 +1207,11 @@ CREATE INDEX idx_fee_payments_date ON public.fee_payments USING btree (payment_d
 
 CREATE INDEX idx_fee_payments_student ON public.fee_payments USING btree (student_id);
 
-
 --
 -- Name: idx_gallery_requests_status; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_gallery_requests_status ON public.gallery_requests USING btree (status);
-
 
 --
 -- Name: idx_students_active; Type: INDEX; Schema: public; Owner: postgres
@@ -1434,13 +1219,11 @@ CREATE INDEX idx_gallery_requests_status ON public.gallery_requests USING btree 
 
 CREATE INDEX idx_students_active ON public.students USING btree (is_active);
 
-
 --
 -- Name: idx_students_level; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_students_level ON public.students USING btree (current_level_id);
-
 
 --
 -- Name: idx_students_roll; Type: INDEX; Schema: public; Owner: postgres
@@ -1448,13 +1231,11 @@ CREATE INDEX idx_students_level ON public.students USING btree (current_level_id
 
 CREATE INDEX idx_students_roll ON public.students USING btree (roll_number);
 
-
 --
 -- Name: idx_teacher_reviews_student; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_teacher_reviews_student ON public.teacher_reviews USING btree (student_id);
-
 
 --
 -- Name: student_batches enforce_batch_capacity; Type: TRIGGER; Schema: public; Owner: postgres
@@ -1462,20 +1243,17 @@ CREATE INDEX idx_teacher_reviews_student ON public.teacher_reviews USING btree (
 
 CREATE TRIGGER enforce_batch_capacity BEFORE INSERT OR UPDATE ON public.student_batches FOR EACH ROW EXECUTE FUNCTION public.check_batch_capacity();
 
-
 --
 -- Name: students student_roll_number_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
 CREATE TRIGGER student_roll_number_trigger BEFORE INSERT ON public.students FOR EACH ROW EXECUTE FUNCTION public.generate_roll_number();
 
-
 --
 -- Name: student_batches update_batch_count_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
 CREATE TRIGGER update_batch_count_trigger AFTER INSERT OR DELETE OR UPDATE ON public.student_batches FOR EACH ROW EXECUTE FUNCTION public.update_batch_enrollment();
-
 
 --
 -- Name: attendance attendance_batch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1484,14 +1262,12 @@ CREATE TRIGGER update_batch_count_trigger AFTER INSERT OR DELETE OR UPDATE ON pu
 ALTER TABLE ONLY public.attendance
     ADD CONSTRAINT attendance_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.batches(batch_id) ON DELETE CASCADE;
 
-
 --
 -- Name: attendance attendance_marked_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.attendance
     ADD CONSTRAINT attendance_marked_by_fkey FOREIGN KEY (marked_by) REFERENCES public.teachers(teacher_id);
-
 
 --
 -- Name: attendance attendance_student_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1500,14 +1276,12 @@ ALTER TABLE ONLY public.attendance
 ALTER TABLE ONLY public.attendance
     ADD CONSTRAINT attendance_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id) ON DELETE CASCADE;
 
-
 --
 -- Name: batch_transfers batch_transfers_batch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.batch_transfers
     ADD CONSTRAINT batch_transfers_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.batches(batch_id) ON DELETE CASCADE;
-
 
 --
 -- Name: batch_transfers batch_transfers_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1516,14 +1290,12 @@ ALTER TABLE ONLY public.batch_transfers
 ALTER TABLE ONLY public.batch_transfers
     ADD CONSTRAINT batch_transfers_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(user_id);
 
-
 --
 -- Name: batch_transfers batch_transfers_from_teacher_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.batch_transfers
     ADD CONSTRAINT batch_transfers_from_teacher_id_fkey FOREIGN KEY (from_teacher_id) REFERENCES public.teachers(teacher_id);
-
 
 --
 -- Name: batch_transfers batch_transfers_to_teacher_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1532,14 +1304,12 @@ ALTER TABLE ONLY public.batch_transfers
 ALTER TABLE ONLY public.batch_transfers
     ADD CONSTRAINT batch_transfers_to_teacher_id_fkey FOREIGN KEY (to_teacher_id) REFERENCES public.teachers(teacher_id);
 
-
 --
 -- Name: batches batches_level_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.batches
     ADD CONSTRAINT batches_level_id_fkey FOREIGN KEY (level_id) REFERENCES public.levels(level_id);
-
 
 --
 -- Name: batches batches_teacher_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1548,14 +1318,12 @@ ALTER TABLE ONLY public.batches
 ALTER TABLE ONLY public.batches
     ADD CONSTRAINT batches_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(teacher_id) ON DELETE SET NULL;
 
-
 --
 -- Name: events events_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.events
     ADD CONSTRAINT events_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(user_id);
-
 
 --
 -- Name: fee_payments fee_payments_fee_structure_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1564,14 +1332,12 @@ ALTER TABLE ONLY public.events
 ALTER TABLE ONLY public.fee_payments
     ADD CONSTRAINT fee_payments_fee_structure_id_fkey FOREIGN KEY (fee_structure_id) REFERENCES public.fee_structure(fee_structure_id);
 
-
 --
 -- Name: fee_payments fee_payments_student_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.fee_payments
     ADD CONSTRAINT fee_payments_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id) ON DELETE CASCADE;
-
 
 --
 -- Name: fee_structure fee_structure_level_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1580,14 +1346,12 @@ ALTER TABLE ONLY public.fee_payments
 ALTER TABLE ONLY public.fee_structure
     ADD CONSTRAINT fee_structure_level_id_fkey FOREIGN KEY (level_id) REFERENCES public.levels(level_id);
 
-
 --
 -- Name: gallery_requests gallery_requests_reviewed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.gallery_requests
     ADD CONSTRAINT gallery_requests_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.users(user_id);
-
 
 --
 -- Name: gallery_requests gallery_requests_student_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1596,14 +1360,12 @@ ALTER TABLE ONLY public.gallery_requests
 ALTER TABLE ONLY public.gallery_requests
     ADD CONSTRAINT gallery_requests_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id) ON DELETE CASCADE;
 
-
 --
 -- Name: gallery gallery_uploaded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.gallery
     ADD CONSTRAINT gallery_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(user_id);
-
 
 --
 -- Name: learning_resources learning_resources_level_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1612,14 +1374,12 @@ ALTER TABLE ONLY public.gallery
 ALTER TABLE ONLY public.learning_resources
     ADD CONSTRAINT learning_resources_level_id_fkey FOREIGN KEY (level_id) REFERENCES public.levels(level_id);
 
-
 --
 -- Name: learning_resources learning_resources_uploaded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.learning_resources
     ADD CONSTRAINT learning_resources_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.teachers(teacher_id);
-
 
 --
 -- Name: makeup_class_bookings makeup_class_bookings_approved_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1628,14 +1388,12 @@ ALTER TABLE ONLY public.learning_resources
 ALTER TABLE ONLY public.makeup_class_bookings
     ADD CONSTRAINT makeup_class_bookings_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.teachers(teacher_id);
 
-
 --
 -- Name: makeup_class_bookings makeup_class_bookings_makeup_batch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.makeup_class_bookings
     ADD CONSTRAINT makeup_class_bookings_makeup_batch_id_fkey FOREIGN KEY (makeup_batch_id) REFERENCES public.batches(batch_id);
-
 
 --
 -- Name: makeup_class_bookings makeup_class_bookings_original_batch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1644,14 +1402,12 @@ ALTER TABLE ONLY public.makeup_class_bookings
 ALTER TABLE ONLY public.makeup_class_bookings
     ADD CONSTRAINT makeup_class_bookings_original_batch_id_fkey FOREIGN KEY (original_batch_id) REFERENCES public.batches(batch_id);
 
-
 --
 -- Name: makeup_class_bookings makeup_class_bookings_student_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.makeup_class_bookings
     ADD CONSTRAINT makeup_class_bookings_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id) ON DELETE CASCADE;
-
 
 --
 -- Name: notices notices_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1660,14 +1416,12 @@ ALTER TABLE ONLY public.makeup_class_bookings
 ALTER TABLE ONLY public.notices
     ADD CONSTRAINT notices_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(user_id);
 
-
 --
 -- Name: student_activity_logs student_activity_logs_student_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.student_activity_logs
     ADD CONSTRAINT student_activity_logs_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id) ON DELETE CASCADE;
-
 
 --
 -- Name: student_batches student_batches_batch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1676,14 +1430,12 @@ ALTER TABLE ONLY public.student_activity_logs
 ALTER TABLE ONLY public.student_batches
     ADD CONSTRAINT student_batches_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.batches(batch_id) ON DELETE CASCADE;
 
-
 --
 -- Name: student_batches student_batches_student_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.student_batches
     ADD CONSTRAINT student_batches_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id) ON DELETE CASCADE;
-
 
 --
 -- Name: student_status_changes student_status_changes_changed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1692,14 +1444,12 @@ ALTER TABLE ONLY public.student_batches
 ALTER TABLE ONLY public.student_status_changes
     ADD CONSTRAINT student_status_changes_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.users(user_id);
 
-
 --
 -- Name: student_status_changes student_status_changes_student_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.student_status_changes
     ADD CONSTRAINT student_status_changes_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id) ON DELETE CASCADE;
-
 
 --
 -- Name: students students_current_level_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1708,14 +1458,12 @@ ALTER TABLE ONLY public.student_status_changes
 ALTER TABLE ONLY public.students
     ADD CONSTRAINT students_current_level_id_fkey FOREIGN KEY (current_level_id) REFERENCES public.levels(level_id);
 
-
 --
 -- Name: students students_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.students
     ADD CONSTRAINT students_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE;
-
 
 --
 -- Name: teacher_reviews teacher_reviews_student_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1724,14 +1472,12 @@ ALTER TABLE ONLY public.students
 ALTER TABLE ONLY public.teacher_reviews
     ADD CONSTRAINT teacher_reviews_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id) ON DELETE CASCADE;
 
-
 --
 -- Name: teacher_reviews teacher_reviews_teacher_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.teacher_reviews
     ADD CONSTRAINT teacher_reviews_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(teacher_id) ON DELETE CASCADE;
-
 
 --
 -- Name: teachers teachers_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -1740,47 +1486,7 @@ ALTER TABLE ONLY public.teacher_reviews
 ALTER TABLE ONLY public.teachers
     ADD CONSTRAINT teachers_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE;
 
-
 --
 -- PostgreSQL database dump complete
 --
-
-\unrestrict hpxYJsLXYeTwLkGuxrW4rs5K4kUhCIgIZVXZwYWJdTHkUnwVIUdyMYPtMkIonmu
-
-
-CREATE TABLE IF NOT EXISTS notices (
-    id SERIAL PRIMARY KEY,
-    title text COLLATE pg_catalog."default" NOT NULL,
-    content text COLLATE pg_catalog."default" NOT NULL,
-    target_audience character varying(50) COLLATE pg_catalog."default" DEFAULT 'all'::character varying,
-    category character varying(50) COLLATE pg_catalog."default" DEFAULT 'general'::character varying,
-    is_important boolean DEFAULT false,
-    status character varying(50) COLLATE pg_catalog."default" DEFAULT 'published'::character varying,
-    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
-);
-
-
-CREATE TABLE IF NOT EXISTS gallery_requests (
-    id SERIAL PRIMARY KEY,
-    student_id integer,
-    title text COLLATE pg_catalog."default" NOT NULL,
-    description text COLLATE pg_catalog."default",
-    media_type character varying(50) COLLATE pg_catalog."default" DEFAULT 'photo'::character varying,
-    category character varying(100) COLLATE pg_catalog."default",
-    status character varying(50) COLLATE pg_catalog."default" DEFAULT 'pending'::character varying,
-    file_url text COLLATE pg_catalog."default",
-    rejection_reason text COLLATE pg_catalog."default",
-    requested_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    reviewed_at timestamp with time zone,
-    reviewed_by integer,
-    CONSTRAINT gallery_requests_student_id_fkey FOREIGN KEY (student_id)
-        REFERENCES users (user_id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE CASCADE,
-    CONSTRAINT gallery_requests_reviewed_by_fkey FOREIGN KEY (reviewed_by)
-        REFERENCES users (user_id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE NO ACTION
-);
 

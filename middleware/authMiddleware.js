@@ -1,75 +1,92 @@
 const jwt = require('jsonwebtoken');
+const pool = require('../config/database');
+const { jwt: jwtConfig } = require('../config/env');
+const AppError = require('../utils/AppError');
 
-const authenticateToken = (req, res, next) => {
+const extractToken = (req) => {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) return null;
+  const token = header.slice(7).trim();
+  return token || null;
+};
+
+// Verify the JWT, then confirm against the database that the account still
+// exists, is active and has not changed its password since the token was
+// issued. This makes deactivation, deletion and password resets take effect
+// immediately instead of when the token expires.
+const resolveUser = async (token) => {
+  let payload;
   try {
-    // Get token from header
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided. Authorization denied.'
-      });
-    }
-
-    // Extract token (format: "Bearer TOKEN")
-    const token = authHeader.split(' ')[1];
-
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Add user info to request object
-    req.user = {
-      userId: decoded.userId,
-      email: decoded.email,
-      role: decoded.role
-    };
-
-    next();
-  } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token has expired. Please login again.'
-      });
-    }
-    
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid token. Authorization denied.'
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: 'Server error during authentication.'
+    payload = jwt.verify(token, jwtConfig.secret, {
+      algorithms: ['HS256'],
+      issuer: jwtConfig.issuer,
     });
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      throw AppError.unauthorized('Your session has expired. Please log in again.');
+    }
+    throw AppError.unauthorized('Invalid session. Please log in again.');
+  }
+
+  const userId = parseInt(payload.sub, 10);
+  if (!Number.isInteger(userId)) {
+    throw AppError.unauthorized('Invalid session. Please log in again.');
+  }
+
+  const { rows } = await pool.query(
+    `SELECT user_id, email, role, is_active, password_changed_at
+       FROM users WHERE user_id = $1`,
+    [userId]
+  );
+  const user = rows[0];
+
+  if (!user || !user.is_active) {
+    throw AppError.unauthorized('Your account is no longer active. Please contact the academy.');
+  }
+
+  if (user.password_changed_at) {
+    const changedAt = Math.floor(new Date(user.password_changed_at).getTime() / 1000);
+    if (payload.iat < changedAt) {
+      throw AppError.unauthorized('Your password was changed. Please log in again.');
+    }
+  }
+
+  // Role always comes from the database, never from the token alone.
+  return { userId: user.user_id, email: user.email, role: user.role };
+};
+
+const authenticateToken = async (req, res, next) => {
+  try {
+    const token = extractToken(req);
+    if (!token) throw AppError.unauthorized('Authentication required.');
+    req.user = await resolveUser(token);
+    next();
+  } catch (err) {
+    next(err);
   }
 };
 
-// Middleware to check if user has specific role
-const authorizeRole = (...allowedRoles) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required.'
-      });
-    }
+// Attaches req.user when a valid token is present; otherwise continues as a
+// guest. Used by public endpoints whose output depends on the viewer.
+const optionalAuth = async (req, res, next) => {
+  const token = extractToken(req);
+  if (!token) return next();
+  try {
+    req.user = await resolveUser(token);
+  } catch (err) {
+    req.user = undefined;
+  }
+  next();
+};
 
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Insufficient permissions.'
-      });
-    }
-
-    next();
-  };
+const authorizeRole = (...allowedRoles) => (req, res, next) => {
+  if (!req.user) return next(AppError.unauthorized());
+  if (!allowedRoles.includes(req.user.role)) return next(AppError.forbidden());
+  next();
 };
 
 module.exports = {
   authenticateToken,
-  authorizeRole
+  optionalAuth,
+  authorizeRole,
 };

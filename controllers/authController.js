@@ -1,89 +1,55 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const pool = require('../config/database');
+const { withTransaction } = require('../config/database');
 const User = require('../models/User');
 const Student = require('../models/Student');
+const AppError = require('../utils/AppError');
+const { wrapController } = require('../utils/asyncHandler');
+const {
+  hashPassword,
+  verifyPassword,
+  signToken,
+  hashOneTimeToken,
+} = require('../utils/security');
 
-// Generate JWT Token
-const generateToken = (userId, email, role) => {
-  return jwt.sign(
-    { userId, email, role },
-    process.env.JWT_SECRET,
-    { expiresIn: '7d' } // Token expires in 7 days
-  );
-};
+const authController = {
+  // POST /api/auth/register  (public) — student self-registration
+  async register(req, res) {
+    const data = req.body; // validated by validators/authValidators.register
 
-// @desc    Register new student
-// @route   POST /api/auth/register
-// @access  Public
-exports.register = async (req, res) => {
-  try {
-    const {
-      email,
-      password,
-      fullName,
-      phone,
-      dateOfBirth,
-      address,
-      guardianName,
-      guardianPhone
-    } = req.body;
-
-    // Validation
-    if (!email || !password || !fullName || !phone) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide all required fields: email, password, fullName, phone'
-      });
+    if (await User.emailExists(data.email)) {
+      throw AppError.conflict('Email already registered. Please login or use a different email.');
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide a valid email address'
-      });
-    }
+    const passwordHash = await hashPassword(data.password);
 
-    // Validate password length
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be at least 6 characters long'
-      });
-    }
+    // User and student profile are created atomically: if the profile insert
+    // fails, the user row is rolled back and the email stays available.
+    const { user, student } = await withTransaction(async (client) => {
+      let levelId = data.currentLevelId;
+      if (levelId) {
+        const { rows } = await client.query('SELECT level_id FROM levels WHERE level_id = $1', [levelId]);
+        if (!rows.length) throw AppError.badRequest('Selected level does not exist.');
+      } else {
+        const { rows } = await client.query('SELECT level_id FROM levels ORDER BY level_number LIMIT 1');
+        levelId = rows[0]?.level_id || null;
+      }
 
-    // Check if user already exists
-    const existingUser = await User.findByEmail(email);
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already registered. Please login or use a different email.'
-      });
-    }
+      const createdUser = await User.create(data.email, passwordHash, 'student', client);
+      const createdStudent = await Student.create(
+        createdUser.user_id,
+        { ...data, currentLevelId: levelId },
+        client
+      );
+      await client.query(
+        `INSERT INTO student_status_changes
+           (student_id, status_from, status_to, change_type, reason, changed_by)
+         VALUES ($1, NULL, 'active', 'enrollment', $2, $3)`,
+        [createdStudent.student_id, data.enrollmentReason || 'Online registration', createdUser.user_id]
+      );
+      return { user: createdUser, student: createdStudent };
+    });
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
-
-    // Create user account
-    const user = await User.create(email, passwordHash, 'student');
-
-    // Create student profile
-    const studentData = {
-      fullName,
-      phone,
-      dateOfBirth: dateOfBirth || null,
-      address: address || null,
-      guardianName: guardianName || null,
-      guardianPhone: guardianPhone || null
-    };
-
-    const student = await Student.create(user.user_id, studentData);
-
-    // Generate token
-    const token = generateToken(user.user_id, user.email, user.role);
-
+    const token = signToken(user);
     res.status(201).json({
       success: true,
       message: 'Registration successful! Welcome to Roopak Nrityalaya.',
@@ -94,118 +60,53 @@ exports.register = async (req, res) => {
           email: user.email,
           role: user.role,
           profile: {
+            ...student,
             studentId: student.student_id,
             fullName: student.full_name,
-            phone: student.phone,
-            currentLevel: 1 // Starts at Praveshika Pratham
-          }
-        }
-      }
+            currentLevel: student.current_level_id,
+          },
+        },
+      },
     });
+  },
 
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error during registration. Please try again.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-};
-
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
-exports.login = async (req, res) => {
-  try {
+  // POST /api/auth/login  (public)
+  async login(req, res) {
     const { email, password } = req.body;
-
-    // Validation
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide email and password'
-      });
-    }
-
-    // Find user by email
     const user = await User.findByEmail(email);
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
-    }
 
-    // Check if account is active
+    // Always run bcrypt, even for unknown emails, to avoid timing leaks.
+    const valid = await verifyPassword(password, user?.password_hash);
+    if (!user || !valid) {
+      throw AppError.unauthorized('Invalid email or password');
+    }
+    // Only reveal the deactivated state after the password was proven.
     if (!user.is_active) {
-      return res.status(403).json({
-        success: false,
-        message: 'Your account has been deactivated. Please contact admin.'
-      });
+      throw AppError.forbidden('Your account has been deactivated. Please contact admin.');
     }
 
-    // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
-    }
-
-    // Update last login
     await User.updateLastLogin(user.user_id);
-
-    // Get full user profile seamlessly using User model (handles students and teachers)
-    const userWithProfile = await User.getUserWithProfile(user.user_id);
-    const profile = userWithProfile ? userWithProfile.profile : null;
-
-    // Generate token
-    const token = generateToken(user.user_id, user.email, user.role);
+    const withProfile = await User.getUserWithProfile(user.user_id);
 
     res.json({
       success: true,
       message: 'Login successful!',
       data: {
-        token,
+        token: signToken(user),
         user: {
           userId: user.user_id,
           email: user.email,
           role: user.role,
-          profile: profile
-        }
-      }
+          profile: withProfile ? withProfile.profile : null,
+        },
+      },
     });
+  },
 
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error during login. Please try again.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-};
-
-// @desc    Get current logged in user
-// @route   GET /api/auth/me
-// @access  Private
-exports.getMe = async (req, res) => {
-  try {
-    // req.user is set by authMiddleware
-    const userId = req.user.userId;
-
-    // Get user with profile
-    const user = await User.getUserWithProfile(userId);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
+  // GET /api/auth/me
+  async getMe(req, res) {
+    const user = await User.getUserWithProfile(req.user.userId);
+    if (!user) throw AppError.notFound('User not found');
     res.json({
       success: true,
       data: {
@@ -213,29 +114,79 @@ exports.getMe = async (req, res) => {
         email: user.email,
         role: user.role,
         isActive: user.is_active,
-        profile: user.profile
-      }
+        profile: user.profile,
+      },
+    });
+  },
+
+  // POST /api/auth/logout — JWTs are stateless; the client discards the token.
+  async logout(req, res) {
+    res.json({ success: true, message: 'Logged out successfully' });
+  },
+
+  // GET /api/auth/password-setup/:token  (public) — validate an invite link
+  async checkSetupToken(req, res) {
+    const { rows } = await pool.query(
+      `SELECT u.email, t.purpose
+         FROM password_setup_tokens t
+         JOIN users u ON u.user_id = t.user_id
+        WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > now()`,
+      [hashOneTimeToken(req.params.token)]
+    );
+    if (!rows.length) throw AppError.badRequest('This link is invalid or has expired.');
+    res.json({ success: true, data: { email: rows[0].email, purpose: rows[0].purpose } });
+  },
+
+  // POST /api/auth/set-password  (public) — complete an invite / reset
+  async setPassword(req, res) {
+    const { token, password } = req.body;
+    const passwordHash = await hashPassword(password);
+
+    const user = await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        `SELECT t.token_id, u.user_id, u.email, u.role, u.is_active
+           FROM password_setup_tokens t
+           JOIN users u ON u.user_id = t.user_id
+          WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > now()
+          FOR UPDATE OF t`,
+        [hashOneTimeToken(token)]
+      );
+      const row = rows[0];
+      if (!row) throw AppError.badRequest('This link is invalid or has expired.');
+      if (!row.is_active) throw AppError.forbidden('This account is deactivated. Please contact admin.');
+
+      await User.setPassword(row.user_id, passwordHash, client);
+      // Burn this token and any other outstanding tokens for the user.
+      await client.query(
+        'UPDATE password_setup_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL',
+        [row.user_id]
+      );
+      return row;
     });
 
-  } catch (error) {
-    console.error('Get me error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching user data',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    res.json({
+      success: true,
+      message: 'Your password has been set. You can now log in.',
+      data: { email: user.email },
     });
-  }
+  },
+
+  // PUT /api/auth/change-password  (authenticated)
+  async changePassword(req, res) {
+    const { currentPassword, newPassword } = req.body;
+    const { rows } = await pool.query('SELECT password_hash FROM users WHERE user_id = $1', [req.user.userId]);
+    if (!rows.length || !(await verifyPassword(currentPassword, rows[0].password_hash))) {
+      throw AppError.badRequest('Current password is incorrect.');
+    }
+    await User.setPassword(req.user.userId, await hashPassword(newPassword));
+    // Issue a fresh token: older tokens are now rejected by the middleware.
+    const user = await User.findById(req.user.userId);
+    res.json({
+      success: true,
+      message: 'Password updated successfully.',
+      data: { token: signToken(user) },
+    });
+  },
 };
 
-// @desc    Logout user (client-side will remove token)
-// @route   POST /api/auth/logout
-// @access  Private
-exports.logout = async (req, res) => {
-  // With JWT, logout is mainly handled client-side by removing the token
-  // This endpoint is here for consistency and future enhancements (like token blacklisting)
-  
-  res.json({
-    success: true,
-    message: 'Logged out successfully'
-  });
-};
+module.exports = wrapController(authController);
