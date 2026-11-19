@@ -46,3 +46,13 @@
 
 ### Removed
 - `controllers/seedController.js`, `routes/seedRoutes.js`, `generatePassword.js`, unused `controllers/batchController.js` and `middleware/roleMiddleware.js`, conflicting schema files.
+
+## Phases 8–10: quality, tests, deployment
+- Admin controller (900+ lines) split into `controllers/admin/{students,teachers,batches,fees,analytics,gallery,messages,shared}.js`; routes unchanged.
+- Pagination for admin fees, contact messages and status history: optional `limit` (1–1000) / `offset`, default cap 500, `X-Total-Count` header (exposed via CORS).
+- Query strings use the simple parser; `npm audit fix` applied (body-parser, multer, minimatch…).
+- `DB_SSL=true` now verifies the server certificate (was always `rejectUnauthorized: false`); `DB_SSL=no-verify` for self-signed providers.
+- Production refuses placeholder `JWT_SECRET` values.
+- `tests/` end-to-end suites (security 124, features 40, pagination 14) and `npm test`; run against a disposable seeded database.
+- `render.yaml` Render blueprint; `docs/DEPLOYMENT.md` (env vars, Neon/Supabase, Render, Vercel, go-live checklist).
+- Residual advisories: `zod` < 4.6.6 (memory use on oversized collections; bodies capped at 100 kB, v4 is a breaking upgrade) and `qs` inside Express.
