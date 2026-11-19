@@ -262,11 +262,15 @@ const adminController = {
             );
           }
           if (currentBatchId && b.batch_id) {
+            // status_from/status_to hold the batch names (column is varchar(50)).
             await client.query(
               `INSERT INTO student_status_changes
                  (student_id, status_from, status_to, change_type, reason, changed_by)
-               VALUES ($1, $2, $3, 'batch_switch', 'Batch changed by administrator', $4)`,
-              [studentId, String(currentBatchId), String(b.batch_id), req.user.userId]
+               SELECT $1, left(f.batch_name, 50), left(t.batch_name, 50), 'batch_switch',
+                      'Batch changed by administrator', $4
+                 FROM batches f, batches t
+                WHERE f.batch_id = $2 AND t.batch_id = $3`,
+              [studentId, currentBatchId, b.batch_id, req.user.userId]
             );
           }
         }
@@ -837,6 +841,16 @@ const adminController = {
     );
     if (!rows.length) throw AppError.notFound('Gallery item not found');
     res.json({ message: 'Gallery item updated', item: rows[0] });
+  },
+
+  // GET /api/admin/gallery/:gallery_id/file — preview, including hidden items
+  async getGalleryFile(req, res) {
+    const { resolveStoredFile } = require('../middleware/uploadMiddleware');
+    const { sendMediaFile } = require('./galleryController');
+    const { rows } = await pool.query('SELECT media_url FROM gallery WHERE gallery_id = $1', [req.params.gallery_id]);
+    const file = rows.length ? resolveStoredFile(rows[0].media_url) : null;
+    if (!file) throw AppError.notFound('File not found');
+    await sendMediaFile(res, file, { cache: 'private, no-store' });
   },
 
   // DELETE /api/admin/gallery/:gallery_id — the file is removed only when no

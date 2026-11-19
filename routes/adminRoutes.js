@@ -99,6 +99,7 @@ router.put(
   validate({ params: v.galleryId, body: v.galleryUpdate }),
   adminController.updateGalleryItem
 );
+router.get('/gallery/:gallery_id/file', validate({ params: v.galleryId }), adminController.getGalleryFile);
 router.delete('/gallery/:gallery_id', validate({ params: v.galleryId }), adminController.deleteGalleryItem);
 
 // Contact-form messages
