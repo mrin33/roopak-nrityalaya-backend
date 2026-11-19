@@ -103,7 +103,7 @@ router.get('/gallery/:gallery_id/file', validate({ params: v.galleryId }), admin
 router.delete('/gallery/:gallery_id', validate({ params: v.galleryId }), adminController.deleteGalleryItem);
 
 // Contact-form messages
-router.get('/messages', adminController.getContactMessages);
+router.get('/messages', validate({ query: v.messagesQuery }), adminController.getContactMessages);
 router.put(
   '/messages/:message_id',
   validate({ params: v.messageId, body: v.messageUpdate }),

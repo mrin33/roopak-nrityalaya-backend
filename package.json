@@ -9,7 +9,8 @@
     "migrate": "node db/migrate.js",
     "migrate:status": "node db/migrate.js status",
     "create-admin": "node scripts/create-admin.js",
-    "seed:dev": "node scripts/seed-dev.js"
+    "seed:dev": "node scripts/seed-dev.js",
+    "test": "node tests/e2e-security.js && node tests/e2e-features.js && node tests/e2e-pagination.js"
   },
   "keywords": [
     "kathak",

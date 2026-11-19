@@ -34,6 +34,7 @@ const withAliases = (aliases, schema) =>
 const optionalBool = z.preprocess(emptyToUndefined, bool.optional());
 const int = (min, max) => z.coerce.number().int().min(min).max(max);
 const optionalInt = (min, max) => z.preprocess(emptyToUndefined, int(min, max).optional());
+const paging = () => ({ limit: optionalInt(1, 1000), offset: optionalInt(0, 1000000) });
 const notInFuture = (label) => (v) => !v || new Date(v) <= new Date(Date.now() + 24 * 3600 * 1000);
 const httpsUrl = z.preprocess(
   (v) => (v === '' ? null : v),
@@ -112,6 +113,7 @@ const admin = {
     is_visible: optionalBool,
   }),
 
+  messagesQuery: z.object({ ...paging() }),
   messageId: idParam('message_id'),
   messageUpdate: z.object({ is_read: bool }),
 
@@ -182,6 +184,7 @@ const admin = {
     month: optionalInt(1, 12),
     year: optionalInt(2000, 2100),
     student_id: optionalId,
+    ...paging(),
   }),
 
   recordFee: withAliases(
@@ -209,6 +212,7 @@ const admin = {
       emptyToUndefined,
       z.enum(['all', 'enrollment', 'discontinuation', 'rejoining', 'batch_switch']).optional()
     ),
+    ...paging(),
   }),
 
   attendanceSummaryQuery: z.object({ start_date: optionalDate, end_date: optionalDate }),

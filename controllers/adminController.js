@@ -1,6 +1,7 @@
 const pool = require('../config/database');
 const { withTransaction } = require('../config/database');
 const AppError = require('../utils/AppError');
+const { pageClause, sendPage } = require('../utils/pagination');
 const { wrapController } = require('../utils/asyncHandler');
 const { unusablePasswordHash, generateOneTimeToken } = require('../utils/security');
 const { frontendUrl, inviteTokenTtlHours } = require('../config/env');
@@ -643,7 +644,7 @@ const adminController = {
 
   // ========================== FEE MANAGEMENT =========================
   async getAllFees(req, res) {
-    const { status, month, year, student_id } = req.validatedQuery || {};
+    const { status, month, year, student_id, limit, offset } = req.validatedQuery || {};
     const values = [];
     const where = [];
 
@@ -665,7 +666,7 @@ const adminController = {
     }
 
     const { rows } = await pool.query(
-      `SELECT fp.*,
+      `SELECT fp.*, COUNT(*) OVER() AS total_count,
               CASE
                 WHEN fp.status = 'completed' THEN 'paid'
                 WHEN fp.status = 'pending' AND fp.due_date < CURRENT_DATE THEN 'overdue'
@@ -675,10 +676,11 @@ const adminController = {
          FROM fee_payments fp
          JOIN students s ON fp.student_id = s.student_id
         ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-        ORDER BY fp.due_date DESC, fp.payment_id DESC`,
+        ORDER BY fp.due_date DESC, fp.payment_id DESC
+        ${pageClause(values, { limit, offset })}`,
       values
     );
-    res.json(rows);
+    sendPage(res, rows);
   },
 
   async recordFeePayment(req, res) {
@@ -870,8 +872,13 @@ const adminController = {
 
   // ========================= CONTACT MESSAGES ========================
   async getContactMessages(req, res) {
-    const { rows } = await pool.query('SELECT * FROM contact_messages ORDER BY is_read, created_at DESC');
-    res.json(rows);
+    const { limit, offset } = req.validatedQuery || {};
+    const values = [];
+    const { rows } = await pool.query(
+      'SELECT *, COUNT(*) OVER() AS total_count FROM contact_messages ORDER BY is_read, created_at DESC ' + pageClause(values, { limit, offset }),
+      values
+    );
+    sendPage(res, rows);
   },
 
   async updateContactMessage(req, res) {
@@ -893,7 +900,7 @@ const adminController = {
 
   // ========================== STATUS CHANGES =========================
   async getStatusChanges(req, res) {
-    const { change_type } = req.validatedQuery || {};
+    const { change_type, limit, offset } = req.validatedQuery || {};
     const values = [];
     let filter = '';
     if (change_type && change_type !== 'all') {
@@ -901,17 +908,18 @@ const adminController = {
       filter = 'WHERE sc.change_type = $1';
     }
     const { rows } = await pool.query(
-      `SELECT sc.*,
+      `SELECT sc.*, COUNT(*) OVER() AS total_count,
               sc.status_from AS old_status, sc.status_to AS new_status, sc.created_at AS changed_at,
               s.full_name AS student_name, s.roll_number, u.email AS changed_by_email
          FROM student_status_changes sc
          JOIN students s ON sc.student_id = s.student_id
          LEFT JOIN users u ON u.user_id = sc.changed_by
         ${filter}
-        ORDER BY sc.created_at DESC`,
+        ORDER BY sc.created_at DESC
+        ${pageClause(values, { limit, offset })}`,
       values
     );
-    res.json(rows);
+    sendPage(res, rows);
   },
 };
 
