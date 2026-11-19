@@ -1,13 +1,28 @@
 # Dependencies
 node_modules/
 
-# Environment variables
+# Environment variables / secrets (keep the template)
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# User-uploaded media (runtime data, never versioned)
+uploads/*
+!uploads/.gitkeep
+
+# Database dumps containing data
+*.dump
+*.backup
 
 # Logs
 logs
 *.log
 npm-debug.log*
+
+# Test coverage
+coverage/
 
 # OS files
 .DS_Store
