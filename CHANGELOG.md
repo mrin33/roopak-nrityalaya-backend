@@ -41,8 +41,8 @@
 - **Public site data:** `GET /api/public/teachers`, `GET /api/public/levels` (with fees), `POST /api/public/contact` (stored, rate-limited) and admin inbox `/api/admin/messages` (migration 0007).
 - Teacher dashboard returns today's classes and how many still need attendance; admin dashboard counts unread messages.
 
-- Calendar  columns are returned as plain  strings (previously JS Dates at server-local midnight, which shifted dates by a day across time zones).
-- Batch-switch history records batch names instead of ids; admin preview endpoint for hidden gallery items ().
+- Calendar `DATE` columns are returned as plain `YYYY-MM-DD` strings (previously JS Dates at server-local midnight, which shifted dates by a day across time zones).
+- Batch-switch history records batch names instead of ids; admin preview endpoint for hidden gallery items (`GET /api/admin/gallery/:id/file`).
 
 ### Removed
 - `controllers/seedController.js`, `routes/seedRoutes.js`, `generatePassword.js`, unused `controllers/batchController.js` and `middleware/roleMiddleware.js`, conflicting schema files.
