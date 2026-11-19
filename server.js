@@ -5,6 +5,7 @@ const config = require('./config/env');
 const pool = require('./config/database');
 const { apiLimiter } = require('./middleware/rateLimiters');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+const responseEnvelope = require('./middleware/responseEnvelope');
 const validate = require('./middleware/validate');
 const galleryController = require('./controllers/galleryController');
 const { content: contentValidators } = require('./validators/domainValidators');
@@ -63,6 +64,7 @@ app.get('/uploads/:filename', ...mediaRoute);
 app.get('/api/media/:filename', ...mediaRoute);
 
 app.use('/api', apiLimiter);
+app.use('/api', responseEnvelope);
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/students', require('./routes/studentRoutes'));
 app.use('/api/teachers', require('./routes/teacherRoutes'));
@@ -70,6 +72,8 @@ app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/notices', require('./routes/noticeRoutes'));
 app.use('/api/gallery-requests', require('./routes/galleryRequestRoutes'));
 app.use('/api/gallery', require('./routes/galleryRoutes'));
+app.use('/api/resources', require('./routes/resourceRoutes'));
+app.use('/api/public', require('./routes/publicRoutes'));
 
 app.use(notFound);
 app.use(errorHandler);

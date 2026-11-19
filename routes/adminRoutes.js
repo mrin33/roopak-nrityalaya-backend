@@ -4,6 +4,13 @@ const validate = require('../middleware/validate');
 const adminController = require('../controllers/adminController');
 const attendanceController = require('../controllers/attendanceController');
 const { admin: v } = require('../validators/domainValidators');
+const { galleryUploader, removeUploadedFile } = require('../middleware/uploadMiddleware');
+const { uploadLimiter } = require('../middleware/rateLimiters');
+
+// If validation fails after multer stored a file, delete it.
+const cleanupOnError = (err, req, res, next) => {
+  removeUploadedFile(req.file).finally(() => next(err));
+};
 
 const router = express.Router();
 
@@ -15,6 +22,12 @@ router.get('/dashboard', adminController.getDashboard);
 
 // Students
 router.get('/students', validate({ query: v.studentsQuery }), adminController.getAllStudents);
+router.post('/students', validate({ body: v.createStudent }), adminController.createStudent);
+router.post(
+  '/students/:student_id/invite',
+  validate({ params: v.studentId }),
+  adminController.regenerateStudentInvite
+);
 router.get('/students/:student_id', validate({ params: v.studentId }), adminController.getStudentDetails);
 router.put(
   '/students/:student_id',
@@ -69,6 +82,33 @@ router.delete(
   validate({ params: v.attendanceId }),
   attendanceController.deleteAttendance
 );
+
+// Gallery management
+router.get('/gallery', adminController.getGallery);
+router.post(
+  '/gallery',
+  uploadLimiter,
+  galleryUploader.single('file'),
+  galleryUploader.verify,
+  validate({ body: v.galleryCreate }),
+  adminController.createGalleryItem,
+  cleanupOnError
+);
+router.put(
+  '/gallery/:gallery_id',
+  validate({ params: v.galleryId, body: v.galleryUpdate }),
+  adminController.updateGalleryItem
+);
+router.delete('/gallery/:gallery_id', validate({ params: v.galleryId }), adminController.deleteGalleryItem);
+
+// Contact-form messages
+router.get('/messages', adminController.getContactMessages);
+router.put(
+  '/messages/:message_id',
+  validate({ params: v.messageId, body: v.messageUpdate }),
+  adminController.updateContactMessage
+);
+router.delete('/messages/:message_id', validate({ params: v.messageId }), adminController.deleteContactMessage);
 
 // Analytics
 router.get('/analytics/best-teachers', adminController.getBestTeachers);

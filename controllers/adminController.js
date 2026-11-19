@@ -43,7 +43,8 @@ const adminController = {
             AND date_trunc('month', payment_date) = date_trunc('month', CURRENT_DATE))::float AS monthly_revenue,
         (SELECT COUNT(*) FROM gallery_requests WHERE status = 'pending')::int AS pending_gallery_requests,
         (SELECT COUNT(*) FROM fee_payments
-          WHERE status = 'pending' AND due_date < CURRENT_DATE)::int AS overdue_payments
+          WHERE status = 'pending' AND due_date < CURRENT_DATE)::int AS overdue_payments,
+        (SELECT COUNT(*) FROM contact_messages WHERE is_read = false)::int AS unread_messages
     `);
     res.json(rows[0]);
   },
@@ -109,6 +110,83 @@ const adminController = {
     );
     if (!rows.length) throw AppError.notFound('Student not found');
     res.json(rows[0]);
+  },
+
+  // POST /api/admin/students — admin enrols a student. Like teachers, the
+  // student receives a one-time link to choose their own password.
+  async createStudent(req, res) {
+    const b = req.body;
+    const result = await withTransaction(async (client) => {
+      const { rows: dup } = await client.query('SELECT 1 FROM users WHERE lower(email) = lower($1)', [b.email]);
+      if (dup.length) throw AppError.conflict('A user with this email already exists.');
+
+      const { rows: level } = await client.query('SELECT 1 FROM levels WHERE level_id = $1', [b.current_level_id]);
+      if (!level.length) throw AppError.badRequest('Selected level does not exist.');
+
+      const { rows: userRows } = await client.query(
+        `INSERT INTO users (email, password_hash, role, is_active, password_changed_at)
+         VALUES (lower($1), $2, 'student', true, now())
+         RETURNING user_id`,
+        [b.email, await unusablePasswordHash()]
+      );
+      const userId = userRows[0].user_id;
+
+      const { rows: studentRows } = await client.query(
+        `INSERT INTO students
+           (user_id, full_name, phone, date_of_birth, gender, address, emergency_contact_name,
+            emergency_contact, current_level_id, payment_window, enrollment_reason)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING *`,
+        [
+          userId, b.full_name, b.phone || null, b.date_of_birth || null, b.gender || null, b.address || null,
+          b.emergency_contact_name || null, b.emergency_contact || null, b.current_level_id,
+          b.payment_window || 'monthly', b.enrollment_reason || null,
+        ]
+      );
+      const student = studentRows[0];
+
+      if (b.batch_id) {
+        const { rows: batch } = await client.query(
+          'SELECT 1 FROM batches WHERE batch_id = $1 AND is_active = true',
+          [b.batch_id]
+        );
+        if (!batch.length) throw AppError.badRequest('Selected batch does not exist or is inactive.');
+        await client.query('INSERT INTO student_batches (student_id, batch_id) VALUES ($1, $2)', [
+          student.student_id,
+          b.batch_id,
+        ]);
+      }
+
+      await client.query(
+        `INSERT INTO student_status_changes (student_id, status_from, status_to, change_type, reason, changed_by)
+         VALUES ($1, NULL, 'active', 'enrollment', $2, $3)`,
+        [student.student_id, b.enrollment_reason || 'Enrolled by administrator', req.user.userId]
+      );
+      const invite = await createPasswordSetupLink(client, userId, 'invite', req.user.userId);
+      return { student: { ...student, email: b.email }, invite };
+    });
+
+    res.status(201).json({
+      message: 'Student enrolled. Share the link so they can set their password.',
+      student: result.student,
+      invite: result.invite,
+    });
+  },
+
+  // POST /api/admin/students/:student_id/invite — new password setup link
+  async regenerateStudentInvite(req, res) {
+    const invite = await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        `SELECT s.user_id, u.last_login, u.is_active
+           FROM students s JOIN users u ON u.user_id = s.user_id
+          WHERE s.student_id = $1`,
+        [req.params.student_id]
+      );
+      if (!rows.length) throw AppError.notFound('Student not found');
+      if (!rows[0].is_active) throw AppError.badRequest('Activate the student before sending a link.');
+      return createPasswordSetupLink(client, rows[0].user_id, rows[0].last_login ? 'reset' : 'invite', req.user.userId);
+    });
+    res.json({ message: 'New password setup link created.', invite });
   },
 
   async updateStudent(req, res) {
@@ -708,6 +786,95 @@ const adminController = {
        ORDER BY count DESC
     `);
     res.json(rows);
+  },
+
+  // ============================= GALLERY =============================
+  // GET /api/admin/gallery — every gallery item, visible or hidden
+  async getGallery(req, res) {
+    const { rows } = await pool.query(
+      `SELECT g.gallery_id AS id, g.*, u.email AS uploaded_by_email,
+              COALESCE(s.full_name, t.full_name) AS uploaded_by_name
+         FROM gallery g
+         LEFT JOIN users u ON u.user_id = g.uploaded_by
+         LEFT JOIN students s ON s.user_id = g.uploaded_by
+         LEFT JOIN teachers t ON t.user_id = g.uploaded_by
+        ORDER BY g.created_at DESC`
+    );
+    res.json(rows);
+  },
+
+  // POST /api/admin/gallery — admin uploads directly (multipart "file")
+  async createGalleryItem(req, res) {
+    const { removeUploadedFile } = require('../middleware/uploadMiddleware');
+    if (!req.file) throw AppError.badRequest('No file uploaded');
+    try {
+      const { title, description, category, is_visible } = req.body;
+      const { rows } = await pool.query(
+        `INSERT INTO gallery (title, description, media_type, media_url, category, uploaded_by, uploader_role, is_visible)
+         VALUES ($1, $2, $3, $4, $5, $6, 'admin', $7)
+         RETURNING gallery_id AS id, *`,
+        [title, description || null, req.file.kind, req.file.storedUrl, category || null, req.user.userId, is_visible ?? true]
+      );
+      res.status(201).json({ message: 'Media uploaded to the gallery', item: rows[0] });
+    } catch (err) {
+      await removeUploadedFile(req.file);
+      throw err;
+    }
+  },
+
+  // PUT /api/admin/gallery/:gallery_id
+  async updateGalleryItem(req, res) {
+    const b = req.body;
+    const { rows } = await pool.query(
+      `UPDATE gallery SET
+         title = COALESCE($1, title),
+         description = COALESCE($2, description),
+         category = COALESCE($3, category),
+         is_visible = COALESCE($4, is_visible)
+       WHERE gallery_id = $5
+       RETURNING gallery_id AS id, *`,
+      [b.title, b.description, b.category, b.is_visible, req.params.gallery_id]
+    );
+    if (!rows.length) throw AppError.notFound('Gallery item not found');
+    res.json({ message: 'Gallery item updated', item: rows[0] });
+  },
+
+  // DELETE /api/admin/gallery/:gallery_id — the file is removed only when no
+  // student request still references it.
+  async deleteGalleryItem(req, res) {
+    const { deleteStoredFile } = require('../middleware/uploadMiddleware');
+    const { rows } = await pool.query('DELETE FROM gallery WHERE gallery_id = $1 RETURNING media_url', [
+      req.params.gallery_id,
+    ]);
+    if (!rows.length) throw AppError.notFound('Gallery item not found');
+    const { rows: refs } = await pool.query('SELECT 1 FROM gallery_requests WHERE media_url = $1 LIMIT 1', [
+      rows[0].media_url,
+    ]);
+    if (!refs.length) await deleteStoredFile(rows[0].media_url);
+    res.json({ message: 'Gallery item deleted' });
+  },
+
+  // ========================= CONTACT MESSAGES ========================
+  async getContactMessages(req, res) {
+    const { rows } = await pool.query('SELECT * FROM contact_messages ORDER BY is_read, created_at DESC');
+    res.json(rows);
+  },
+
+  async updateContactMessage(req, res) {
+    const { rows } = await pool.query(
+      'UPDATE contact_messages SET is_read = $1 WHERE message_id = $2 RETURNING *',
+      [req.body.is_read, req.params.message_id]
+    );
+    if (!rows.length) throw AppError.notFound('Message not found');
+    res.json({ message: 'Message updated', contactMessage: rows[0] });
+  },
+
+  async deleteContactMessage(req, res) {
+    const { rowCount } = await pool.query('DELETE FROM contact_messages WHERE message_id = $1', [
+      req.params.message_id,
+    ]);
+    if (!rowCount) throw AppError.notFound('Message not found');
+    res.json({ message: 'Message deleted' });
   },
 
   // ========================== STATUS CHANGES =========================

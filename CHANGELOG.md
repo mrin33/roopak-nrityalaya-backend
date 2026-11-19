@@ -33,5 +33,13 @@
 - Payment history (previously always empty), performance score (was hardcoded 85), practice-hour totals.
 - Deleting a batch with attendance history or a student with payments is blocked with a clear message instead of silently destroying records.
 
+### Backend functionality (phase 5)
+- **Consistent API responses:** every success is `{ success: true, message?, data }`, every error `{ success: false, message, errors? }` (`middleware/responseEnvelope.js`).
+- **Learning resources:** teachers upload files (PDF, MP3/WAV/M4A, MP4/WEBM, images — magic-byte verified) or add https links, and delete their own; students list resources for their level; `GET /api/resources/:id/file` enforces level-based access.
+- **Admin Add Student** (`POST /api/admin/students`) with optional batch, enrolment history and an invitation link; `POST /api/admin/students/:id/invite` issues reset links.
+- **Admin gallery management:** list/upload/hide/delete (`/api/admin/gallery`).
+- **Public site data:** `GET /api/public/teachers`, `GET /api/public/levels` (with fees), `POST /api/public/contact` (stored, rate-limited) and admin inbox `/api/admin/messages` (migration 0007).
+- Teacher dashboard returns today's classes and how many still need attendance; admin dashboard counts unread messages.
+
 ### Removed
 - `controllers/seedController.js`, `routes/seedRoutes.js`, `generatePassword.js`, unused `controllers/batchController.js` and `middleware/roleMiddleware.js`, conflicting schema files.

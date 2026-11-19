@@ -46,7 +46,28 @@ const teacherController = {
         ORDER BY tr.created_at DESC LIMIT 5`,
       [teacherId]
     );
-    res.json({ ...rows[0], recent_reviews: recent });
+    // Batch schedules are free text such as "Mon, Wed, Fri" or "Monday/Thursday";
+    // a batch meets today when its schedule mentions today's weekday.
+    const { rows: today } = await pool.query(
+      `SELECT b.batch_id, b.batch_name, b.schedule, b."time", b.room,
+              COUNT(DISTINCT sb.student_id)::int AS students,
+              EXISTS (SELECT 1 FROM attendance a
+                       WHERE a.batch_id = b.batch_id AND a.attendance_date = CURRENT_DATE) AS attendance_marked
+         FROM batches b
+         LEFT JOIN student_batches sb ON sb.batch_id = b.batch_id AND sb.is_active = true
+        WHERE b.teacher_id = $1 AND b.is_active = true
+          AND b.schedule ~* ('(^|[^a-z])(' || trim(to_char(CURRENT_DATE, 'Dy')) || '|daily|everyday)')
+        GROUP BY b.batch_id
+        ORDER BY b."time"`,
+      [teacherId]
+    );
+    res.json({
+      ...rows[0],
+      recent_reviews: recent,
+      today_batches: today,
+      classes_today: today.length,
+      pending_attendance: today.filter((b) => !b.attendance_marked).length,
+    });
   },
 
   // PUT /api/teachers/profile — allowlisted self-service fields only

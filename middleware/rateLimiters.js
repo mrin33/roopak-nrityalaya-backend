@@ -30,6 +30,8 @@ const registerLimiter = make(60, 10, 'Too many registration attempts. Please try
 
 const passwordSetupLimiter = make(15, 10, 'Too many attempts. Please try again in 15 minutes.');
 
+const contactLimiter = make(60, 5, 'Too many messages sent. Please try again later.');
+
 const uploadLimiter = make(60, 30, 'Upload limit reached. Please try again later.');
 
 // Generous global ceiling for the whole API.
@@ -40,5 +42,6 @@ module.exports = {
   registerLimiter,
   passwordSetupLimiter,
   uploadLimiter,
+  contactLimiter,
   apiLimiter,
 };

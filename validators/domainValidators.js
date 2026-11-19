@@ -80,6 +80,41 @@ const admin = {
     })
   ),
 
+  createStudent: withAliases(
+    { full_name: ['fullName', 'name'], current_level_id: ['level_id', 'levelId'], payment_window: ['paymentWindow'] },
+    z.object({
+      email,
+      full_name: requiredText('Full name'),
+      phone,
+      date_of_birth: optionalDate,
+      gender,
+      address: optionalText(1000),
+      emergency_contact_name: optionalText(255),
+      emergency_contact: phone,
+      current_level_id: id,
+      payment_window: z.preprocess(emptyToUndefined, paymentWindow.optional()),
+      batch_id: optionalId,
+      enrollment_reason: optionalText(2000),
+    })
+  ),
+
+  galleryId: idParam('gallery_id'),
+  galleryCreate: z.object({
+    title: requiredText('Title', 255),
+    description: optionalText(2000),
+    category: optionalText(100),
+    is_visible: optionalBool,
+  }),
+  galleryUpdate: z.object({
+    title: optionalText(255),
+    description: optionalText(2000),
+    category: optionalText(100),
+    is_visible: optionalBool,
+  }),
+
+  messageId: idParam('message_id'),
+  messageUpdate: z.object({ is_read: bool }),
+
   changeStudentStatus: z.object({
     status: z.enum(['active', 'inactive', 'discontinued'], {
       errorMap: () => ({ message: 'Status must be active, inactive or discontinued' }),
@@ -238,6 +273,26 @@ const teacher = {
     })
   ),
 
+  resourceId: idParam('resource_id'),
+  createResource: withAliases(
+    { level_id: ['level'], resource_type: ['type'] },
+    z.object({
+      title: requiredText('Title', 255),
+      description: optionalText(2000),
+      level_id: optionalId,
+      resource_type: z.preprocess(emptyToUndefined, z.enum(['video', 'audio', 'document', 'image']).optional()),
+      external_url: z.preprocess(
+        emptyToUndefined,
+        z
+          .string()
+          .max(500)
+          .url('Must be a valid link')
+          .refine((v) => /^https:\/\//i.test(v), 'Links must start with https://')
+          .optional()
+      ),
+    })
+  ),
+
   makeupId: idParam('booking_id'),
   makeupDecision: z.object({
     status: z.enum(['approved', 'rejected', 'completed']),
@@ -339,4 +394,15 @@ const content = {
   mediaParams: z.object({ filename: z.string().max(200) }),
 };
 
-module.exports = { admin, teacher, student, content, withAliases, NOTICE_CATEGORIES };
+// ───────────────────────────── public ─────────────────────────────
+const publicSite = {
+  contact: z.object({
+    name: requiredText('Name', 255),
+    email,
+    phone,
+    subject: optionalText(255),
+    message: requiredText('Message', 5000),
+  }),
+};
+
+module.exports = { admin, teacher, student, content, publicSite, withAliases, NOTICE_CATEGORIES };

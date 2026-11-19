@@ -6,7 +6,14 @@ const reviewController = require('../controllers/reviewController');
 const batchTransferController = require('../controllers/batchTransferController');
 const attendanceController = require('../controllers/attendanceController');
 const makeupClassController = require('../controllers/makeupClassController');
+const resourceController = require('../controllers/resourceController');
 const { teacher: v } = require('../validators/domainValidators');
+const { resourceUploader, removeUploadedFile } = require('../middleware/uploadMiddleware');
+const { uploadLimiter } = require('../middleware/rateLimiters');
+
+const cleanupOnError = (err, req, res, next) => {
+  removeUploadedFile(req.file).finally(() => next(err));
+};
 
 const router = express.Router();
 
@@ -39,6 +46,19 @@ router.get('/reviews', reviewController.getTeacherReviews);
 router.get('/batch-transfers', batchTransferController.getMyTransfers);
 router.post('/batch-transfers', validate({ body: v.createTransfer }), batchTransferController.create);
 router.get('/batch-transfers/available-teachers', batchTransferController.getAvailableTeachers);
+
+// Learning resources (file upload or external link)
+router.get('/resources', resourceController.getTeacherResources);
+router.post(
+  '/resources',
+  uploadLimiter,
+  resourceUploader.single('file'),
+  resourceUploader.verify,
+  validate({ body: v.createResource }),
+  resourceController.createResource,
+  cleanupOnError
+);
+router.delete('/resources/:resource_id', validate({ params: v.resourceId }), resourceController.deleteResource);
 
 // Makeup class requests targeting this teacher's batches
 router.get('/makeup-requests', makeupClassController.getTeacherRequests);

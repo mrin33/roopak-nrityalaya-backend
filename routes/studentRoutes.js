@@ -8,6 +8,7 @@ const feeController = require('../controllers/feeController');
 const scheduleController = require('../controllers/scheduleController');
 const reviewController = require('../controllers/reviewController');
 const makeupClassController = require('../controllers/makeupClassController');
+const resourceController = require('../controllers/resourceController');
 const { student: v } = require('../validators/domainValidators');
 
 const router = express.Router();
@@ -49,6 +50,9 @@ router.get('/schedule', scheduleController.getStudentSchedule);
 // Reviews from teachers
 router.get('/reviews', validate({ query: v.reviewsQuery }), reviewController.getStudentReviews);
 router.put('/reviews/:review_id/viewed', validate({ params: v.reviewId }), reviewController.markViewed);
+
+// Learning resources for the student's level
+router.get('/resources', resourceController.getStudentResources);
 
 // Makeup classes
 router.get('/missed-classes', makeupClassController.getMissedClasses);
