@@ -13,6 +13,8 @@ const { content: contentValidators } = require('./validators/domainValidators');
 const app = express();
 
 app.disable('x-powered-by');
+// Query strings are flat key=value pairs only; the simple parser avoids qs (nested/array parsing).
+app.set('query parser', 'simple');
 if (config.trustProxy) app.set('trust proxy', config.trustProxy);
 
 // Security headers. Media is fetched cross-origin by the frontend, so the
